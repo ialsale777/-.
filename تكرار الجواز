@@ -1,0 +1,67 @@
+# -.function onEdit(e) {
+  const sheet = e.source.getActiveSheet();
+  const range = e.range;
+  const editedValues = range.getValues();
+
+  // جلب رؤوس الأعمدة
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const passportColIndex = headers.indexOf("رقم الجواز");
+
+  if (passportColIndex === -1) return;
+
+  const allSheets = e.source.getSheets();
+  const currentSheetName = sheet.getName();
+
+  // المرور على كل خلية تم تعديلها
+  for (let i = 0; i < range.getNumRows(); i++) {
+    for (let j = 0; j < range.getNumColumns(); j++) {
+      const row = range.getRow() + i;
+      const col = range.getColumn() + j;
+      const editedValue = editedValues[i][j];
+
+      if (row === 1 || col !== passportColIndex + 1 || !editedValue) continue;
+
+      const normalizedValue = editedValue.toString().trim().toLowerCase();
+      let duplicateFound = false;
+      let duplicateLocation = "";
+
+      // 🔁 التحقق من التكرار في جميع الأوراق الأخرى
+      for (let s = 0; s < allSheets.length; s++) {
+        const otherSheet = allSheets[s];
+        const otherName = otherSheet.getName();
+        if (otherName === currentSheetName || otherName === "الورقة6") continue;
+
+        const otherHeaders = otherSheet.getRange(1, 1, 1, otherSheet.getLastColumn()).getValues()[0];
+        const otherPassportIndex = otherHeaders.indexOf("رقم الجواز");
+        if (otherPassportIndex === -1) continue;
+
+        const data = otherSheet.getRange(2, otherPassportIndex + 1, otherSheet.getLastRow() - 1).getValues().flat();
+        const normalizedData = data.map(v => v.toString().trim().toLowerCase());
+
+        if (normalizedData.includes(normalizedValue)) {
+          duplicateFound = true;
+          duplicateLocation = otherName;
+          break;
+        }
+      }
+
+      // 🔁 التحقق من التكرار داخل نفس الورقة
+      const currentData = sheet.getRange(2, passportColIndex + 1, sheet.getLastRow() - 1).getValues().flat();
+      const normalizedCurrentData = currentData.map(v => v.toString().trim().toLowerCase());
+      let duplicateInSameSheet = normalizedCurrentData.filter(v => v === normalizedValue).length > 1;
+
+      const cell = sheet.getRange(row, col);
+
+      // 🖍️ التلوين والتنبيه
+      if (duplicateFound || duplicateInSameSheet) {
+        cell.setBackground("#FFCDD2"); // أحمر فاتح
+        let msg = "⚠️ رقم الجواز مكرر ";
+        if (duplicateFound) msg += `في ورقة: ${duplicateLocation} `;
+        if (duplicateInSameSheet) msg += `(أو داخل نفس الورقة)`;
+        SpreadsheetApp.getActive().toast(msg, "تحذير", 6);
+      } else {
+        cell.setBackground(null); // إزالة التلوين
+      }
+    }
+  }
+}
