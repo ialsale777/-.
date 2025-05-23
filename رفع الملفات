@@ -1,0 +1,58 @@
+// 🗂️ معرفات المجلدات (استبدلها بمعرفات المجلدات الفعلية من Google Drive)
+const folderMap = {
+  "الابلكيشن": "1xtXIHvfcRnVwQl8oEuzXl5M40uAnzVzV",
+  "التأمين": "18PNd5NTx-TjSGAojzCW8eoOgQV6SjwUF",
+  "التذاكر": "1qZdULT3dGKfdRC0pgN8JkOgXhMJahdwI",
+  "الفنادق": "11s1I5y-aSK_fRC1Un0Wr5t0FJ5cKVBlM"
+};
+
+function onOpen() {
+  const ui = SpreadsheetApp.getUi();
+  ui.createMenu('📁 إدارة الملفات')
+    .addItem('رفع ملف الابلكيشن', 'openUploadDialog_App')
+    .addItem('رفع ملف التأمين', 'openUploadDialog_Insurance')
+    .addItem('رفع ملف التذاكر', 'openUploadDialog_Tickets')
+    .addItem('رفع ملف الفنادق', 'openUploadDialog_Hotels')
+    .addToUi();
+}
+
+// دوال لكل نوع
+function openUploadDialog_App()       { openUploadDialogWithType("الابلكيشن"); }
+function openUploadDialog_Insurance() { openUploadDialogWithType("التأمين"); }
+function openUploadDialog_Tickets()   { openUploadDialogWithType("التذاكر"); }
+function openUploadDialog_Hotels()    { openUploadDialogWithType("الفنادق"); }
+
+// الدالة العامة
+function openUploadDialogWithType(columnName) {
+  const template = HtmlService.createTemplateFromFile('UploadForm');
+  template.columnTarget = columnName;
+  const html = template.evaluate().setWidth(400).setHeight(300);
+  SpreadsheetApp.getUi().showModalDialog(html, `رفع ملف: ${columnName}`);
+}
+
+// دالة الرفع
+function uploadFileToDrive(data) {
+  try {
+    const folderId = folderMap[data.column];
+    if (!folderId) return "❌ لا يوجد مجلد مخصص لهذا النوع: " + data.column;
+
+    const folder = DriveApp.getFolderById(folderId);
+    const blob = Utilities.newBlob(Utilities.base64Decode(data.base64), data.mimeType, data.fileName);
+    const file = folder.createFile(blob);
+    const fileUrl = file.getUrl();
+
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    const activeRow = sheet.getActiveCell().getRow();
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const targetCol = headers.indexOf(data.column);
+
+    if (targetCol === -1) {
+      return "❌ لم يتم العثور على عمود " + data.column;
+    }
+
+    sheet.getRange(activeRow, targetCol + 1).setValue(fileUrl);
+    return `✅ تم رفع الملف بنجاح إلى مجلد "${data.column}" وحُفظ الرابط.`;
+  } catch (e) {
+    return "❌ خطأ أثناء الرفع: " + e.toString();
+  }
+}
