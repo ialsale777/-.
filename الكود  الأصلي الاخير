@@ -1,0 +1,138 @@
+function manualRun() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet();
+  const masterSheet = sheet.getSheetByName("الورقة6");
+  const allData = masterSheet.getDataRange().getValues();
+  const header = allData[0];
+
+  const passportIndex = header.indexOf("رقم الجواز");
+  const dateIndex = header.indexOf("مواعيد البصمة");
+  let statusIndex = header.indexOf("تم النقل");
+
+  const startCol = 2;
+
+  if (statusIndex === -1) {
+    statusIndex = header.length;
+    masterSheet.getRange(1, statusIndex + 1).setValue("تم النقل");
+  }
+
+  const excludeColumns = ["تم النقل", "مواعيد البصمة"];
+  const allowedHeader = header
+    .map((col, idx) => ({ name: col, idx }))
+    .filter((col) => col.idx >= startCol && !excludeColumns.includes(col.name));
+  const allowedIndexes = allowedHeader.map(col => col.idx);
+  let cleanHeader = allowedHeader.map(col => col.name);
+
+  const birthDateIndexInAllowed = cleanHeader.indexOf("تاريخ الميلاد");
+  if (birthDateIndexInAllowed !== -1) {
+    cleanHeader.splice(birthDateIndexInAllowed + 1, 0, "العمر");
+  }
+
+  for (let i = 1; i < allData.length; i++) {
+    const row = allData[i];
+    const passport = row[passportIndex];
+    const date = row[dateIndex];
+    const status = row[statusIndex];
+
+    if (!passport || !date || status === "✅") continue;
+
+    const sheetNameFull = date.toString().trim();
+    const baseName = sheetNameFull.replace(/\(\d+\)/, '').trim();
+
+    let target = sheet.getSheets().find(s => s.getName().startsWith(baseName));
+
+    if (!target) {
+      target = sheet.insertSheet(sheetNameFull);
+      target.setFrozenRows(1);
+      target.getRange(1, 1, 1, cleanHeader.length).setValues([cleanHeader]);
+
+      for (let c = 0; c < cleanHeader.length; c++) {
+        const originalIndex = (c <= birthDateIndexInAllowed)
+          ? allowedIndexes[c]
+          : allowedIndexes[c - 1];
+
+        if (originalIndex !== undefined) {
+          const sourceCell = masterSheet.getRange(1, originalIndex + 1);
+          const targetCell = target.getRange(1, c + 1);
+          sourceCell.copyTo(targetCell, SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+          targetCell.setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
+          const colWidth = masterSheet.getColumnWidth(originalIndex + 1);
+          target.setColumnWidth(c + 1, colWidth);
+        } else {
+          target.setColumnWidth(c + 1, 100);
+        }
+      }
+    }
+
+    let passportExists = false;
+    const allSheets = sheet.getSheets();
+    for (let s = 0; s < allSheets.length; s++) {
+      const currentSheet = allSheets[s];
+      if (currentSheet.getName() === "الورقة6") continue;
+
+      const sheetData = currentSheet.getDataRange().getValues();
+      const headerRow = sheetData[0];
+      const passportIdx = headerRow.indexOf("رقم الجواز");
+
+      if (passportIdx !== -1) {
+        const passports = sheetData.slice(1).map(r => r[passportIdx]);
+        if (passports.includes(passport)) {
+          passportExists = true;
+          break;
+        }
+      }
+    }
+
+    if (!passportExists) {
+      const currentCount = target.getLastRow() - 1;
+      const nameMatch = target.getName().match(/\((\d+)\)/);
+      const maxAllowed = nameMatch ? parseInt(nameMatch[1], 10) : 30;
+
+      if (currentCount >= maxAllowed) {
+        SpreadsheetApp.getActive().toast(
+          `❌ تم الوصول للحد الأقصى (${maxAllowed}) في الورقة: ${target.getName()}`,
+          "تنبيه",
+          6
+        );
+        continue;
+      }
+
+      let cleanRow = allowedIndexes.map(idx => row[idx]);
+
+      let birthDateValue = cleanRow[birthDateIndexInAllowed];
+      let age = "";
+      if (typeof birthDateValue === "string") {
+        birthDateValue = new Date(birthDateValue);
+      }
+      if (birthDateValue instanceof Date && !isNaN(birthDateValue)) {
+        const today = new Date();
+        age = today.getFullYear() - birthDateValue.getFullYear();
+        const m = today.getMonth() - birthDateValue.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < birthDateValue.getDate())) {
+          age--;
+        }
+      }
+
+      cleanRow.splice(birthDateIndexInAllowed + 1, 0, age);
+
+      const targetRowNum = target.getLastRow() + 1;
+      target.getRange(targetRowNum, 1, 1, cleanRow.length).setValues([cleanRow]);
+
+      const sourceRange = masterSheet.getRange(i + 1, 1, 1, cleanRow.length);
+      const targetRange = target.getRange(targetRowNum, 1, 1, cleanRow.length);
+      sourceRange.copyTo(targetRange, SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+
+      targetRange.setTextDirection(SpreadsheetApp.TextDirection.RIGHT_TO_LEFT);
+
+      masterSheet.getRange(i + 1, statusIndex + 1).setValue("✅");
+
+      const ageCell = target.getRange(targetRowNum, birthDateIndexInAllowed + 2);
+      if (typeof age === "number") {
+        if (age < 6) {
+          ageCell.setBackground("#FFF9C4");
+        } else if (age < 12) {
+          ageCell.setBackground("#BBDEFB");
+        }
+      }
+    }
+  }
+}
