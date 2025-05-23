@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      #loading { color: #555; margin-top: 10px; }
+    </style>
+  </head>
+  <body>
+    <form id="form">
+      <label>اختر الملف:</label><br><br>
+      <input type="file" id="fileInput" name="file" required><br><br>
+      <input type="submit" value="رفع">
+    </form>
+
+    <div id="loading" style="display:none;">⏳ جاري رفع الملف...</div>
+    <div id="msg" style="margin-top:10px;"></div>
+
+    <script>
+      document.getElementById("form").addEventListener("submit", function(e) {
+        e.preventDefault();
+        const fileInput = document.getElementById("fileInput");
+        const file = fileInput.files[0];
+        const reader = new FileReader();
+
+        reader.onload = function() {
+          const base64Data = reader.result.split(',')[1];
+          const data = {
+            fileName: file.name,
+            mimeType: file.type,
+            base64: base64Data,
+            column: "<?= columnTarget ?>"
+
+          };
+
+          document.getElementById("loading").style.display = "block";
+
+          google.script.run.withSuccessHandler(function(msg) {
+            document.getElementById("loading").style.display = "none";
+            document.getElementById("msg").innerText = msg;
+          }).uploadFileToDrive(data);
+        };
+
+        reader.readAsDataURL(file);
+      });
+    </script>
+  </body>
+</html>
