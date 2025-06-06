@@ -78,8 +78,12 @@ function checkAndSendAll() {
         try {
           const res = UrlFetchApp.fetch(url, { method: "get" });
           const json = JSON.parse(res.getContentText());
-          const result = json.status === "success" ? "✅" : "❌";
-          sheet.getRange(i + 1, statusIndex + 1).setValue(result);
+          if (json.status === "success") {
+  sheet.getRange(i + 1, statusIndex + 1).setValue("✅");
+} else {
+  sheet.getRange(i + 1, statusIndex + 1).setValue("❌");
+}
+
         } catch (err) {
           sheet.getRange(i + 1, statusIndex + 1).setValue("❌");
         }
