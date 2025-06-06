@@ -1,78 +1,89 @@
 function onEdit(e) {
   const sheet = e.source.getActiveSheet();
   const sheetName = sheet.getName();
-  const range = e.range;
-  const row = range.getRow();
-  const col = range.getColumn();
+  const row = e.range.getRow();
+  const col = e.range.getColumn();
 
   if (sheetName === "الورقة6") return;
 
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
 
   const colNames = {
-    "رسالة طلب تحضير الأوراق": { handler: handlePrepareDocs, statusCol: "MS" },
-    "رسالة اقرار باستلام الورق": { handler: handleAcknowledgeDocs, statusCol: "MS1" },
-    "رسالة الموعد": { handler: handleAppointment, statusCol: "MS2" },
-    "رسالة تم التبصيم": { handler: handleFingerprintDone, statusCol: "MS3" },
-    "رسالة استلام الجواز": { handler: handlePassportReceived, statusCol: "MS4" }
+    "رسالة طلب تحضير الأوراق": "MS",
+    "رسالة اقرار باستلام الورق": "MS1",
+    "رسالة الموعد": "MS2",
+    "رسالة تم التبصيم": "MS3",
+    "رسالة استلام الجواز": "MS4"
   };
 
-  for (const colName in colNames) {
-    const triggerCol = headers.indexOf(colName) + 1;
-    if (col === triggerCol) {
-      colNames[colName].handler(sheet, row, headers, colName, colNames[colName].statusCol);
+  for (const triggerColName in colNames) {
+    const triggerIndex = headers.indexOf(triggerColName) + 1;
+    if (col === triggerIndex) {
+      const value = e.range.getValue();
+      const statusIndex = headers.indexOf(colNames[triggerColName]) + 1;
+      if (value === true) {
+        sheet.getRange(row, statusIndex).setValue("🔁 جاهز");
+      }
       break;
     }
   }
 }
-function formatPhone(raw) {
-  let phone = raw.toString().trim().replace(/^0+/, "");
-  if (!phone.startsWith("966")) phone = "966" + phone;
-  return phone;
-}
+function checkAndSendAll() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const allSheets = ss.getSheets();
 
-function sendWhatsApp(sheet, row, phone, message, statusColIndex) {
   const instanceId = "6795E5298DEC5";
   const accessToken = "66f85a4411dc4";
-  const url = `https://app.arrivewhats.com/api/send?number=${phone}&type=text&message=${encodeURIComponent(message)}&instance_id=${instanceId}&access_token=${accessToken}`;
 
-  try {
-    const response = UrlFetchApp.fetch(url, { method: "get" });
-    const json = JSON.parse(response.getContentText());
-    const result = json.status === "success" ? "✅" : "❌";
-    sheet.getRange(row, statusColIndex).setValue(result);
-  } catch (err) {
-    sheet.getRange(row, statusColIndex).setValue("❌");
-  }
-}
-function handlePrepareDocs(sheet, row, headers, triggerColName, statusColName) {
-  if (sheet.getRange(row, headers.indexOf(triggerColName) + 1).getValue() !== true) return;
-  const phone = formatPhone(sheet.getRange(row, headers.indexOf("رقم الجوال") + 1).getValue());
-  const message = `مرحبًا، هذه رسالة طلب تحضير الأوراق من شركة تجوال. الرجاء تجهيز الأوراق المطلوبة. شكرًا لك.`;
-  sendWhatsApp(sheet, row, phone, message, headers.indexOf(statusColName) + 1);
-}
-function handleAcknowledgeDocs(sheet, row, headers, triggerColName, statusColName) {
-  if (sheet.getRange(row, headers.indexOf(triggerColName) + 1).getValue() !== true) return;
-  const phone = formatPhone(sheet.getRange(row, headers.indexOf("رقم الجوال") + 1).getValue());
-  const message = `تم استلام أوراقك بنجاح. نشكرك على تعاونك مع شركة تجوال.`;
-  sendWhatsApp(sheet, row, phone, message, headers.indexOf(statusColName) + 1);
-}
-function handleAppointment(sheet, row, headers, triggerColName, statusColName) {
-  if (sheet.getRange(row, headers.indexOf(triggerColName) + 1).getValue() !== true) return;
-  const phone = formatPhone(sheet.getRange(row, headers.indexOf("رقم الجوال") + 1).getValue());
-  const dateTime = sheet.getRange(row, headers.indexOf("تاريخ الموعد") + 1).getDisplayValue();
-  const message = `عزيزنا العميل، تم تحديد موعد حضورك لدى شركة تجوال في: ${dateTime}.\nالرجاء الالتزام بالحضور في الوقت المحدد.`;
-  sendWhatsApp(sheet, row, phone, message, headers.indexOf(statusColName) + 1);
-}
-function handleFingerprintDone(sheet, row, headers, triggerColName, statusColName) {
-  if (sheet.getRange(row, headers.indexOf(triggerColName) + 1).getValue() !== true) return;
-  const phone = formatPhone(sheet.getRange(row, headers.indexOf("رقم الجوال") + 1).getValue());
-  const message = `نشكرك على حضورك، تم تأكيد عملية التبصيم بنجاح. نتمنى لك رحلة موفقة من شركة تجوال.`;
-  sendWhatsApp(sheet, row, phone, message, headers.indexOf(statusColName) + 1);
-}
-function handlePassportReceived(sheet, row, headers, triggerColName, statusColName) {
-  if (sheet.getRange(row, headers.indexOf(triggerColName) + 1).getValue() !== true) return;
-  const phone = formatPhone(sheet.getRange(row, headers.indexOf("رقم الجوال") + 1).getValue());
-  const message = `يسعدنا إبلاغك بأنه تم استلام الجواز الخاص بك من قبل شركة تجوال. شكرًا لتعاملك معنا.`;
-  sendWhatsApp(sheet, row, phone, message, headers.indexOf(statusColName) + 1);
+  allSheets.forEach(sheet => {
+    const name = sheet.getName();
+    if (name === "الورقة6") return;
+
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+
+    const config = [
+      { trigger: "رسالة طلب تحضير الأوراق", status: "MS", message: r => `مرحبًا، هذه رسالة طلب تحضير الأوراق من شركة تجوال. الرجاء تجهيز الأوراق المطلوبة. شكرًا لك.` },
+      { trigger: "رسالة اقرار باستلام الورق", status: "MS1", message: r => `تم استلام أوراقك بنجاح. نشكرك على تعاونك مع شركة تجوال.` },
+      { trigger: "رسالة الموعد", status: "MS2", message: r => `عزيزنا العميل، تم تحديد موعد حضورك لدى شركة تجوال في: ${r["تاريخ الموعد"]}.\nالرجاء الالتزام بالحضور في الوقت المحدد.` },
+      { trigger: "رسالة تم التبصيم", status: "MS3", message: r => `نشكرك على حضورك، تم تأكيد عملية التبصيم بنجاح. نتمنى لك رحلة موفقة من شركة تجوال.` },
+      { trigger: "رسالة استلام الجواز", status: "MS4", message: r => `يسعدنا إبلاغك بأنه تم استلام الجواز الخاص بك من قبل شركة تجوال. شكرًا لتعاملك معنا.` }
+    ];
+
+    const phoneIndex = headers.indexOf("رقم الجوال");
+
+    config.forEach(({ trigger, status, message }) => {
+      const triggerIndex = headers.indexOf(trigger);
+      const statusIndex = headers.indexOf(status);
+      const dateIndex = headers.indexOf("تاريخ الموعد");
+
+      if (triggerIndex === -1 || statusIndex === -1 || phoneIndex === -1) return;
+
+      for (let i = 1; i < data.length; i++) {
+        const row = data[i];
+        const phoneRaw = row[phoneIndex];
+        const statusValue = row[statusIndex];
+
+        if (statusValue !== "🔁 جاهز" || !row[triggerIndex]) continue;
+
+        let phone = phoneRaw.toString().trim().replace(/^0+/, "");
+        if (!phone.startsWith("966")) phone = "966" + phone;
+
+        const rowObj = {};
+        headers.forEach((h, idx) => rowObj[h] = row[idx]);
+
+        const msg = message(rowObj);
+
+        const url = `https://app.arrivewhats.com/api/send?number=${phone}&type=text&message=${encodeURIComponent(msg)}&instance_id=${instanceId}&access_token=${accessToken}`;
+        try {
+          const res = UrlFetchApp.fetch(url, { method: "get" });
+          const json = JSON.parse(res.getContentText());
+          const result = json.status === "success" ? "✅" : "❌";
+          sheet.getRange(i + 1, statusIndex + 1).setValue(result);
+        } catch (err) {
+          sheet.getRange(i + 1, statusIndex + 1).setValue("❌");
+        }
+      }
+    });
+  });
 }
