@@ -124,6 +124,47 @@ function manualRun() {
       targetRange.setTextDirection(SpreadsheetApp.TextDirection.RIGHT_TO_LEFT);
 
       masterSheet.getRange(i + 1, statusIndex + 1).setValue("✅");
+// ⬇️ إرسال رسالة تأكيد الحجز
+const nameIndex = cleanHeader.indexOf("الاسم مطابق للجواز");
+const phoneIndex = cleanHeader.indexOf("رقم الجوال");
+const statusConfirmIndex = cleanHeader.indexOf("رسالة تأكيد الحجز");
+
+let confirmPhone = cleanRow[phoneIndex];
+let confirmName = cleanRow[nameIndex];
+if (confirmPhone && statusConfirmIndex !== -1) {
+  confirmPhone = confirmPhone.toString().trim().replace(/^0+/, "");
+  if (!confirmPhone.startsWith("966")) confirmPhone = "966" + confirmPhone;
+
+  const visaDateMatch = sheetNameFull.match(/^(\d+)([A-Z]{3})/);
+  let visaDate = "غير محدد";
+  if (visaDateMatch) {
+    const day = visaDateMatch[1];
+    const monthEng = visaDateMatch[2];
+    const monthMap = {
+      JAN: "يناير", FEB: "فبراير", MAR: "مارس", APR: "أبريل",
+      MAY: "مايو", JUN: "يونيو", JUL: "يوليو", AUG: "أغسطس",
+      SEP: "سبتمبر", OCT: "أكتوبر", NOV: "نوفمبر", DEC: "ديسمبر"
+    };
+    visaDate = `*${day} ${monthMap[monthEng] || monthEng}*`;
+  }
+
+  const message =
+    `📌 مرحبًا *${confirmName || ""}*،\n` +
+    `تم تأكيد حجز موعد البصمة الشنغن الخاص بك بتاريخ ${visaDate}.\n\n` +
+    `سيتم التواصل معك من قبل الموظف في حال الحاجة لأي تفاصيل إضافية.\n` +
+    `⚠️ هذه رسالة تأكيد آلية ولا يجب الرد عليها.`;
+
+  const url = `https://app.arrivewhats.com/api/send?number=${confirmPhone}&type=text&message=${encodeURIComponent(message)}&instance_id=6795E5298DEC5&access_token=66f85a4411dc4`;
+
+  try {
+    const response = UrlFetchApp.fetch(url, { method: "get" });
+    const json = JSON.parse(response.getContentText());
+    const status = json.status === "success" ? "✅" : "❌";
+    target.getRange(targetRowNum, statusConfirmIndex + 1).setValue(status);
+  } catch (err) {
+    target.getRange(targetRowNum, statusConfirmIndex + 1).setValue("❌");
+  }
+}
 
       const ageCell = target.getRange(targetRowNum, birthDateIndexInAllowed + 2);
       if (typeof age === "number") {
