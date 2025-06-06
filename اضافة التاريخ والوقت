@@ -1,0 +1,30 @@
+// تضيف القائمة في الشريط العلوي عند فتح الشيت
+function onOpen() {
+  const ui = SpreadsheetApp.getUi();
+  ui.createMenu('📅 أدوات مخصصة')
+    .addItem('اختيار التاريخ والوقت', 'showDateTimePicker')
+    .addToUi();
+
+  // مثال إضافي: تفعيل آخر شيت عند الفتح (اختياري)
+  /*
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  const sheets = spreadsheet.getSheets();
+  const lastSheet = sheets[sheets.length - 1];
+  spreadsheet.setActiveSheet(lastSheet);
+  */
+}
+
+// تعرض نافذة اختيار التاريخ والوقت
+function showDateTimePicker() {
+  const html = HtmlService.createHtmlOutputFromFile('DateTimePicker')
+    .setWidth(400)
+    .setHeight(250);
+  SpreadsheetApp.getUi().showModalDialog(html, 'اختيار التاريخ والوقت');
+}
+
+// تضع التاريخ والوقت في الخلية النشطة
+function setDateTime(dateTime) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  const cell = sheet.getActiveCell();
+  cell.setValue(new Date(dateTime));
+}
