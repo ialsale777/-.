@@ -42,39 +42,38 @@ function checkAndSendAll() {
 
     const config = [
       {
-        trigger: "رسالة اقرار باستلام الورق",
-        status: "MS1",
-        message: r => `📩 *تأكيد استلام الأوراق*\n\n` +
-                      `مرحبًا *${r["الاسم مطابق للجواز"] || ""}*،\n\n` +
-                      `تم استلام مستندات الطلبات الخاصة بك بنجاح.\n\n` +
-                      `⚠️ هذه رسالة آلية، لا يلزم الرد.`
-      },
-      {
         trigger: "رسالة الموعد",
         status: "MS2",
         message: r => {
-          const name = r["الاسم مطابق للجواز"] || "";
+          const name = r["الاسم مطابق للجواز"]?.toString().trim() || "عميلنا";
           const rawDate = r["تاريخ الموعد"];
-          let dateStr = "";
+          let dateStr = "غير محدد";
+          let timeStr = "غير محدد";
 
           if (rawDate instanceof Date) {
             const tz = Session.getScriptTimeZone();
+            const datePart = Utilities.formatDate(rawDate, tz, "yyyy/MM/dd");
             const timePart = Utilities.formatDate(rawDate, tz, "hh:mm");
             const meridian = Utilities.formatDate(rawDate, tz, "a");
             const meridianAr = meridian === "AM" ? "صباحًا" : "مساءً";
-            const datePart = Utilities.formatDate(rawDate, tz, "yyyy/MM/dd");
-            dateStr = `${datePart} ${timePart} ${meridianAr}`;
-          } else {
-            dateStr = rawDate?.toString() || "";
+
+            dateStr = datePart;
+            timeStr = `${timePart} ${meridianAr}`;
           }
 
-          return `📅 *إشعار بموعد البصمة*\n\n` +
+          return `📅 موعدك للتبصيم - تأشيرة شنغن 🇪🇺\n\n` +
                  `عزيزي العميل *${name}*،\n\n` +
-                 `موعدك للتبصيم هو ${dateStr}.\n\n` +
-                 `📍 موقع الحضور: تجوال للسياحة – برج الحويزي\n\n` +
-                 `يرجى الحضور مبكرًا لأخذ رقم.\n\n` +
-                 `⚠️ هذه رسالة تأكيد آلية، لا يلزم الرد عليها.`;
+                 `📍 الموقع: مكتب تجوال للسياحة – برج الحويزي\n` +
+                 `📆 التاريخ: ${dateStr}\n` +
+                 `🕘 الوقت: ${timeStr}\n\n` +
+                 `يرجى الحضور قبل الموعد لأخذ رقم.\n` +
+                 `⚠️ هذه رسالة آلية، لا يلزم الرد.`;
         }
+      },
+      {
+        trigger: "رسالة اقرار باستلام الورق",
+        status: "MS1",
+        message: r => `📩 *تأكيد استلام الأوراق*\n\nمرحبًا *${r["الاسم مطابق للجواز"] || ""}*،\n\nتم استلام مستندات الطلبات الخاصة بك بنجاح.\n\n⚠️ هذه رسالة آلية، لا يلزم الرد.`
       },
       {
         trigger: "رسالة تم التبصيم",
@@ -91,7 +90,7 @@ function checkAndSendAll() {
         status: "MS4",
         message: r => {
           const name = r["الاسم مطابق للجواز"]?.toString().trim() || "";
-          return `عزيزي العميل *${name}*،\n\nنرجو التفضل بالحضور لاستلام الجواز من مكتب "تجوال للسياحة" – برج الحويزي.\n🕘 من 12:00 ظهرًا حتى 10:00 مساءً (عدا الجمعة)\n📍 الموظف: مصطفى شلبي\n\n✈️ نتمنى لك رحلة سعيدة\n⚠️ هذه رسالة آلية، لا يلزم الرد.`;
+          return `عزيزي العميل *${name}*،\n\nنرجو التفضل بالحضور لاستلام الجواز من مكتب \"تجوال للسياحة\" – برج الحويزي.\n🕘 من 12:00 ظهرًا حتى 10:00 مساءً (عدا الجمعة)\n📍 الموظف: مصطفى شلبي\n\n✈️ نتمنى لك رحلة سعيدة\n⚠️ هذه رسالة آلية، لا يلزم الرد.`;
         }
       }
     ];
@@ -106,7 +105,14 @@ function checkAndSendAll() {
         const phoneRaw = row[phoneIndex];
         const statusValue = row[statusIndex];
 
-        if (statusValue !== "🔁 جاهز" || !row[triggerIndex]) continue;
+        if (!row[triggerIndex]) continue;
+        if (statusValue === "✅" || statusValue === "⏳ جاري الإرسال") continue;
+
+        if (statusValue === "🔁 جاهز") {
+          sheet.getRange(i + 1, statusIndex + 1).setValue("⏳ جاري الإرسال");
+          SpreadsheetApp.flush();
+          Logger.log(`⏳ جاري الإرسال - ${phoneRaw}`);
+        }
 
         let phone = phoneRaw.toString().trim().replace(/^0+/, "");
         if (!phone.startsWith("966")) phone = "966" + phone;
@@ -136,11 +142,16 @@ function checkAndSendAll() {
           const json = JSON.parse(response.getContentText());
           const result = (json.status === "PENDING" || json.status === "success") ? "✅" : "❌";
           sheet.getRange(i + 1, statusIndex + 1).setValue(result);
+          Logger.log(`📤 إرسال إلى ${phone} | ${result} | ${trigger}`);
+
+          if (trigger === "رسالة الموعد") {
+            Utilities.sleep(Math.floor(Math.random() * (15000 - 5000 + 1)) + 5000);
+          }
         } catch (err) {
           sheet.getRange(i + 1, statusIndex + 1).setValue("❌");
+          Logger.log(`❌ خطأ في الإرسال إلى ${phone}: ${err.message}`);
         }
       }
     });
   });
 }
-
