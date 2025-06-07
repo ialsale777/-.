@@ -117,7 +117,7 @@ function manualRun() {
       const targetRowNum = target.getLastRow() + 1;
       target.getRange(targetRowNum, 1, 1, cleanRow.length).setValues([cleanRow]);
 
-      const checkboxCols = ["رسالة طلب تحضير الأوراق", "رسالة اقرار باستلام الورق", "رسالة الموعد", "رسالة تم التبصيم", "رسالة استلام الجواز"];
+      const checkboxCols = [ "رسالة اقرار باستلام الورق", "رسالة الموعد", "رسالة تم التبصيم", "رسالة استلام الجواز"];
       checkboxCols.forEach(colName => {
         const colIndex = cleanHeader.indexOf(colName);
         if (colIndex !== -1) {
