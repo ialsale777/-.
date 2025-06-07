@@ -116,15 +116,15 @@ function manualRun() {
 
       const targetRowNum = target.getLastRow() + 1;
       target.getRange(targetRowNum, 1, 1, cleanRow.length).setValues([cleanRow]);
-const checkboxCols = ["رسالة طلب تحضير الأوراق", "رسالة اقرار باستلام الورق", "رسالة الموعد", "رسالة تم التبصيم", "رسالة استلام الجواز"];
 
-checkboxCols.forEach(colName => {
-  const colIndex = cleanHeader.indexOf(colName);
-  if (colIndex !== -1) {
-    const cell = target.getRange(targetRowNum, colIndex + 1);
-    cell.insertCheckboxes();
-  }
-});
+      const checkboxCols = ["رسالة طلب تحضير الأوراق", "رسالة اقرار باستلام الورق", "رسالة الموعد", "رسالة تم التبصيم", "رسالة استلام الجواز"];
+      checkboxCols.forEach(colName => {
+        const colIndex = cleanHeader.indexOf(colName);
+        if (colIndex !== -1) {
+          const cell = target.getRange(targetRowNum, colIndex + 1);
+          cell.insertCheckboxes();
+        }
+      });
 
       const sourceRange = masterSheet.getRange(i + 1, 1, 1, cleanRow.length);
       const targetRange = target.getRange(targetRowNum, 1, 1, cleanRow.length);
@@ -133,47 +133,52 @@ checkboxCols.forEach(colName => {
       targetRange.setTextDirection(SpreadsheetApp.TextDirection.RIGHT_TO_LEFT);
 
       masterSheet.getRange(i + 1, statusIndex + 1).setValue("✅");
-// ⬇️ إرسال رسالة تأكيد الحجز
-const nameIndex = cleanHeader.indexOf("الاسم مطابق للجواز");
-const phoneIndex = cleanHeader.indexOf("رقم الجوال");
-const statusConfirmIndex = cleanHeader.indexOf("رسالة تأكيد الحجز");
 
-let confirmPhone = cleanRow[phoneIndex];
-let confirmName = cleanRow[nameIndex];
-if (confirmPhone && statusConfirmIndex !== -1) {
-  confirmPhone = confirmPhone.toString().trim().replace(/^0+/, "");
-  if (!confirmPhone.startsWith("966")) confirmPhone = "966" + confirmPhone;
+      const nameIndex = cleanHeader.indexOf("الاسم مطابق للجواز");
+      const phoneIndex = cleanHeader.indexOf("رقم الجوال");
+      const statusConfirmIndex = cleanHeader.indexOf("رسالة تأكيد الحجز");
 
-  const visaDateMatch = sheetNameFull.match(/^(\d+)([A-Z]{3})/);
-  let visaDate = "غير محدد";
-  if (visaDateMatch) {
-    const day = visaDateMatch[1];
-    const monthEng = visaDateMatch[2];
-    const monthMap = {
-      JAN: "يناير", FEB: "فبراير", MAR: "مارس", APR: "أبريل",
-      MAY: "مايو", JUN: "يونيو", JUL: "يوليو", AUG: "أغسطس",
-      SEP: "سبتمبر", OCT: "أكتوبر", NOV: "نوفمبر", DEC: "ديسمبر"
-    };
-    visaDate = `*${day} ${monthMap[monthEng] || monthEng}*`;
-  }
+      let confirmPhone = cleanRow[phoneIndex];
+      let confirmName = cleanRow[nameIndex];
+      if (confirmPhone && statusConfirmIndex !== -1) {
+        confirmPhone = confirmPhone.toString().trim().replace(/^0+/, "");
+        if (!confirmPhone.startsWith("966")) confirmPhone = "966" + confirmPhone;
 
-  const message =
-    `📌 مرحبًا *${confirmName || ""}*،\n` +
-    `تم تأكيد حجز موعد البصمة الشنغن الخاص بك بتاريخ ${visaDate}.\n\n` +
-    `سيتم التواصل معك من قبل الموظف في حال الحاجة لأي تفاصيل إضافية.\n` +
-    `⚠️ هذه رسالة تأكيد آلية ولا يجب الرد عليها.`;
+        const visaDateMatch = sheetNameFull.match(/^(\d+)([A-Z]{3})/);
+        let visaDate = "غير محدد";
+        if (visaDateMatch) {
+          const day = visaDateMatch[1];
+          const monthEng = visaDateMatch[2];
+          const monthMap = {
+            JAN: "يناير", FEB: "فبراير", MAR: "مارس", APR: "أبريل",
+            MAY: "مايو", JUN: "يونيو", JUL: "يوليو", AUG: "أغسطس",
+            SEP: "سبتمبر", OCT: "أكتوبر", NOV: "نوفمبر", DEC: "ديسمبر"
+          };
+          visaDate = `*${day} ${monthMap[monthEng] || monthEng}*`;
+        }
 
-  const url = `https://app.arrivewhats.com/api/send?number=${confirmPhone}&type=text&message=${encodeURIComponent(message)}&instance_id=6795E5298DEC5&access_token=66f85a4411dc4`;
+        const message =
+          `📌 مرحبًا *${confirmName || ""}*،\n` +
+          `تم تأكيد حجز موعد البصمة الشنغن الخاص بك بتاريخ ${visaDate}.\n\n` +
+          `سيتم التواصل معك من قبل الموظف في حال الحاجة لأي تفاصيل إضافية.\n` +
+          `⚠️ هذه رسالة تأكيد آلية ولا يجب الرد عليها.`;
 
-  try {
-    const response = UrlFetchApp.fetch(url, { method: "get" });
-    const json = JSON.parse(response.getContentText());
-    const status = json.status === "success" ? "✅" : "❌";
-    target.getRange(targetRowNum, statusConfirmIndex + 1).setValue(status);
-  } catch (err) {
-    target.getRange(targetRowNum, statusConfirmIndex + 1).setValue("❌");
-  }
-}
+        const url = `https://app.arrivewhats.com/api/send?number=${confirmPhone}&type=text&message=${encodeURIComponent(message)}&instance_id=6795E5298DEC5&access_token=66f85a4411dc4`;
+
+        try {
+          const response = UrlFetchApp.fetch(url, { method: "get" });
+          const json = JSON.parse(response.getContentText());
+          const status = json.status === "success" ? "✅" : "❌";
+          target.getRange(targetRowNum, statusConfirmIndex + 1).setValue(status);
+
+          // ⬇️ تسجيل اللوق في شيت Logs
+          Logger.log(`📤 إرسال تأكيد الحجز\nالاسم: ${confirmName}\nالجوال: ${confirmPhone}\nالحالة: ${status}\nالرسالة:\n${message}\n`);
+
+          
+        } catch (err) {
+          target.getRange(targetRowNum, statusConfirmIndex + 1).setValue("❌");
+        }
+      }
 
       const ageCell = target.getRange(targetRowNum, birthDateIndexInAllowed + 2);
       if (typeof age === "number") {
@@ -185,67 +190,4 @@ if (confirmPhone && statusConfirmIndex !== -1) {
       }
     }
   }
-}
-function retryFailedConfirmations() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const allSheets = ss.getSheets();
-
-  const instanceId = "6795E5298DEC5";
-  const accessToken = "66f85a4411dc4";
-
-  allSheets.forEach(sheet => {
-    const sheetName = sheet.getName();
-    if (sheetName === "الورقة6") return;
-
-    const data = sheet.getDataRange().getValues();
-    const headers = data[0];
-
-    const phoneIndex = headers.indexOf("رقم الجوال");
-    const nameIndex = headers.indexOf("الاسم مطابق للجواز");
-    const statusIndex = headers.indexOf("رسالة تأكيد الحجز");
-
-    if (phoneIndex === -1 || nameIndex === -1 || statusIndex === -1) return;
-
-    const visaDateMatch = sheetName.match(/^(\d+)([A-Z]{3})/);
-    let visaDate = "غير محدد";
-    if (visaDateMatch) {
-      const day = visaDateMatch[1];
-      const monthEng = visaDateMatch[2];
-      const monthMap = {
-        JAN: "يناير", FEB: "فبراير", MAR: "مارس", APR: "أبريل",
-        MAY: "مايو", JUN: "يونيو", JUL: "يوليو", AUG: "أغسطس",
-        SEP: "سبتمبر", OCT: "أكتوبر", NOV: "نوفمبر", DEC: "ديسمبر"
-      };
-      visaDate = `*${day} ${monthMap[monthEng] || monthEng}*`;
-    }
-
-    for (let i = 1; i < data.length; i++) {
-      const row = data[i];
-      const phoneRaw = row[phoneIndex];
-      const name = row[nameIndex];
-      const status = row[statusIndex];
-
-      if (status !== "❌") continue; // نعيد فقط المحاولات الفاشلة
-
-      let phone = phoneRaw.toString().trim().replace(/^0+/, "");
-      if (!phone.startsWith("966")) phone = "966" + phone;
-
-      const message =
-        `📌 مرحبًا *${name || ""}*،\n` +
-        `تم تأكيد حجز موعد البصمة الشنغن الخاص بك بتاريخ ${visaDate}.\n\n` +
-        `سيتم التواصل معك من قبل الموظف في حال الحاجة لأي تفاصيل إضافية.\n` +
-        `⚠️ هذه رسالة تأكيد آلية ولا يجب الرد عليها.`;
-
-      const url = `https://app.arrivewhats.com/api/send?number=${phone}&type=text&message=${encodeURIComponent(message)}&instance_id=${instanceId}&access_token=${accessToken}`;
-
-      try {
-        const response = UrlFetchApp.fetch(url, { method: "get" });
-        const json = JSON.parse(response.getContentText());
-        const result = json.status === "success" ? "✅" : "❌";
-        sheet.getRange(i + 1, statusIndex + 1).setValue(result);
-      } catch (err) {
-        sheet.getRange(i + 1, statusIndex + 1).setValue("❌");
-      }
-    }
-  });
 }
