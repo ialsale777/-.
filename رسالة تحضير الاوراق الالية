@@ -11,7 +11,7 @@ function autoSendPreparationMessages() {
 
     const phoneIndex = headers.indexOf("رقم الجوال");
     const nameIndex = headers.indexOf("الاسم مطابق للجواز");
-    const statusIndex = headers.indexOf("MS");
+    const statusIndex = headers.indexOf("رسالة طلب تحضير الأوراق");
 
     if (phoneIndex === -1 || nameIndex === -1 || statusIndex === -1) return;
 
