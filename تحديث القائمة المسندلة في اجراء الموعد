@@ -1,0 +1,26 @@
+function refreshDropdownsInAllSheets() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheets = ss.getSheets();
+  const sheetNames = sheets.map(s => s.getName()).filter(name => name !== "الورقة6");
+  const dropdownOptions = [...sheetNames, "إلغاء الموعد"];
+
+  for (const sheet of sheets) {
+    const name = sheet.getName();
+    if (name === "الورقة6") continue;
+
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const dropdownColIndex = headers.indexOf("إجراء تغيير الموعد");
+    if (dropdownColIndex === -1) continue;
+
+    const lastRow = sheet.getLastRow();
+    const range = sheet.getRange(2, dropdownColIndex + 1, lastRow - 1); // من الصف 2 لأن 1 رؤوس
+    const rule = SpreadsheetApp.newDataValidation()
+      .requireValueInList(dropdownOptions, true)
+      .setAllowInvalid(false)
+      .build();
+    range.setDataValidation(rule);
+  }
+
+  SpreadsheetApp.getUi().alert("✅ تم تحديث القوائم المنسدلة.");
+
+}
