@@ -1,0 +1,78 @@
+function autoSendPreparationMessages() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const allSheets = ss.getSheets();
+
+  allSheets.forEach(sheet => {
+    const name = sheet.getName();
+    if (name === "الورقة6") return;
+
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+
+    const phoneIndex = headers.indexOf("رقم الجوال");
+    const nameIndex = headers.indexOf("الاسم مطابق للجواز");
+    const statusIndex = headers.indexOf("MS");
+
+    if (phoneIndex === -1 || nameIndex === -1 || statusIndex === -1) return;
+
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      const status = row[statusIndex];
+      if (status) continue; // تم الإرسال أو محاولة سابقة
+
+      let phone = row[phoneIndex]?.toString().trim().replace(/^0+/, "");
+      if (!phone.startsWith("966")) phone = "966" + phone;
+      const name = row[nameIndex] || "";
+
+      const message = `📌 *متطلبات تأشيرة شنغن - فرنسا 🇫🇷*\n\n` +
+                      `مرحبًا *${name}*،\n\n` +
+                      `نرجو تسليم المستندات التالية لبدء إجراءات تأشيرتك:\n\n` +
+                      `1. صورتان شخصية حديثة (4.5 × 3.5) بخلفية بيضاء\n` +
+                      `2. أصل جواز السفر\n` +
+                      `3. صورة من تأشيرة شنغن سابقة (إن وجدت)\n` +
+                      `4. صورة الهوية السعودية / الإقامة\n` +
+                      `5. خطاب تعريف بالعمل (بالإنجليزية) يحتوي على:\n` +
+                      ` - المسمى الوظيفي\n` +
+                      ` - الراتب\n` +
+                      ` - تاريخ الالتحاق\n` +
+                      ` - مصدق من الغرفة التجارية\n` +
+                      `6. كشف حساب بنكي لآخر 4 أشهر:\n` +
+                      ` - باللغة الإنجليزية\n` +
+                      ` - مختوم وصادر من تطبيق البنك\n` +
+                      `7. أن لا يقل الرصيد عن 10,000 ريال\n\n` +
+                      `📩 *يرجى تسليم الأوراق في أقرب وقت ممكن لتأكيد موعد البصمة.*\n\n` +
+                      `⚠️ هذه رسالة تأكيد آلية ولا يجب الرد عليها.`;
+
+      const body = {
+        number: phone,
+        text: message
+      };
+
+      const options = {
+        method: 'post',
+        contentType: 'application/json',
+        headers: {
+          'apikey': '878559AC4207-4520-A544-80D3FEB9ED9B'
+        },
+        payload: JSON.stringify(body),
+        muteHttpExceptions: true
+      };
+
+      try {
+        const response = UrlFetchApp.fetch("https://w.eh4.me/message/sendText/ABD1", options);
+        const json = JSON.parse(response.getContentText());
+
+        Logger.log(`📤 إرسال إلى: ${phone}\nالاسم: ${name}\nالنتيجة: ${json.status}`);
+
+        if (json.status === "PENDING" || json.status === "success") {
+          sheet.getRange(i + 1, statusIndex + 1).setValue("✅");
+        } else {
+          sheet.getRange(i + 1, statusIndex + 1).setValue("❌");
+        }
+      } catch (err) {
+        Logger.log(`❌ فشل إرسال إلى: ${phone} | الخطأ: ${err.message}`);
+        sheet.getRange(i + 1, statusIndex + 1).setValue("❌");
+      }
+    }
+  });
+}
