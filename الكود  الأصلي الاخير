@@ -1,3 +1,6 @@
+const EVOLUTION_API_URL = "https://w.eh4.me/message/sendText/ABD1";
+const EVOLUTION_API_KEY = "878559AC4207-4520-A544-80D3FEB9ED9B";
+
 function manualRun() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet();
   const masterSheet = sheet.getSheetByName("الورقة6");
@@ -141,21 +144,34 @@ function manualRun() {
           `سيتم التواصل معك من قبل الموظف في حال الحاجة لأي تفاصيل إضافية.\n` +
           `⚠️ هذه رسالة تأكيد آلية ولا يجب الرد عليها.`;
 
-        const url = `https://app.arrivewhats.com/api/send?number=${confirmPhone}&type=text&message=${encodeURIComponent(message)}&instance_id=6795E5298DEC5&access_token=66f85a4411dc4`;
+        const body = {
+          number: confirmPhone,
+          text: message
+        };
+
+        const options = {
+          method: 'post',
+          contentType: 'application/json',
+          headers: {
+            'apikey': EVOLUTION_API_KEY
+          },
+          payload: JSON.stringify(body),
+          muteHttpExceptions: true
+        };
 
         let sendStatus = "❌";
         try {
-          const response = UrlFetchApp.fetch(url, { method: "get" });
+          const response = UrlFetchApp.fetch(EVOLUTION_API_URL, options);
           const json = JSON.parse(response.getContentText());
-          sendStatus = json.status === "success" ? "✅" : "❌";
+          sendStatus = json.status === "PENDING" || json.status === "success" ? "✅" : "❌";
         } catch (err) {}
 
         if (sendStatus === "❌") {
           Utilities.sleep(5000);
           try {
-            const retryResponse = UrlFetchApp.fetch(url, { method: "get" });
+            const retryResponse = UrlFetchApp.fetch(EVOLUTION_API_URL, options);
             const retryJson = JSON.parse(retryResponse.getContentText());
-            sendStatus = retryJson.status === "success" ? "✅" : "❌";
+            sendStatus = retryJson.status === "PENDING" || retryJson.status === "success" ? "✅" : "❌";
           } catch (retryErr) {}
         }
 
@@ -167,14 +183,11 @@ function manualRun() {
       }
     }
   }
-}
+} 
 
 function retryFailedConfirmations() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const allSheets = ss.getSheets();
-
-  const instanceId = "6795E5298DEC5";
-  const accessToken = "66f85a4411dc4";
 
   allSheets.forEach(sheet => {
     const sheetName = sheet.getName();
@@ -219,13 +232,26 @@ function retryFailedConfirmations() {
         `سيتم التواصل معك من قبل الموظف في حال الحاجة لأي تفاصيل إضافية.\n` +
         `⚠️ هذه رسالة تأكيد آلية ولا يجب الرد عليها.`;
 
-      const url = `https://app.arrivewhats.com/api/send?number=${phone}&type=text&message=${encodeURIComponent(message)}&instance_id=${instanceId}&access_token=${accessToken}`;
+      const body = {
+        number: phone,
+        text: message
+      };
+
+      const options = {
+        method: 'post',
+        contentType: 'application/json',
+        headers: {
+          'apikey': EVOLUTION_API_KEY
+        },
+        payload: JSON.stringify(body),
+        muteHttpExceptions: true
+      };
 
       let sendStatus = "❌";
       try {
-        const response = UrlFetchApp.fetch(url, { method: "get" });
+        const response = UrlFetchApp.fetch(EVOLUTION_API_URL, options);
         const json = JSON.parse(response.getContentText());
-        sendStatus = json.status === "success" ? "✅" : "❌";
+        sendStatus = json.status === "PENDING" || json.status === "success" ? "✅" : "❌";
       } catch (err) {}
 
       sheet.getRange(i + 1, statusIndex + 1).setValue(sendStatus);
