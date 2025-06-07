@@ -9,7 +9,6 @@ function onEdit(e) {
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
 
   const colNames = {
-    "رسالة طلب تحضير الأوراق": "MS",
     "رسالة اقرار باستلام الورق": "MS1",
     "رسالة الموعد": "MS2",
     "رسالة تم التبصيم": "MS3",
@@ -42,31 +41,6 @@ function checkAndSendAll() {
     const phoneIndex = headers.indexOf("رقم الجوال");
 
     const config = [
-      {
-        trigger: "رسالة طلب تحضير الأوراق",
-        status: "MS",
-        message: r => {
-          const name = r["الاسم مطابق للجواز"] || "";
-          return `📌 *متطلبات تأشيرة شنغن - فرنسا 🇫🇷*\n\n` +
-                 `مرحبًا *${name}*،\n\n` +
-                 `نرجو تسليم المستندات التالية لبدء إجراءات تأشيرتك:\n\n` +
-                 `1. صورتان شخصية حديثة (4.5 × 3.5) بخلفية بيضاء\n` +
-                 `2. أصل جواز السفر\n` +
-                 `3. صورة من تأشيرة شنغن سابقة (إن وجدت)\n` +
-                 `4. صورة الهوية السعودية / الإقامة\n` +
-                 `5. خطاب تعريف بالعمل (بالإنجليزية) يحتوي على:\n` +
-                 ` - المسمى الوظيفي\n` +
-                 ` - الراتب\n` +
-                 ` - تاريخ الالتحاق\n` +
-                 ` - مصدق من الغرفة التجارية\n` +
-                 `6. كشف حساب بنكي لآخر 4 أشهر:\n` +
-                 ` - باللغة الإنجليزية\n` +
-                 ` - مختوم وصادر من تطبيق البنك\n` +
-                 `7. أن لا يقل الرصيد عن 10,000 ريال\n\n` +
-                 `📩 *يرجى تسليم الأوراق في أقرب وقت ممكن لتأكيد موعد البصمة.*\n\n` +
-                 `⚠️ هذه رسالة تأكيد آلية ولا يجب الرد عليها.`;
-        }
-      },
       {
         trigger: "رسالة اقرار باستلام الورق",
         status: "MS1",
@@ -159,14 +133,9 @@ function checkAndSendAll() {
 
         try {
           const response = UrlFetchApp.fetch("https://w.eh4.me/message/sendText/ABD1", options);
-          const responseText = response.getContentText();
-          const json = JSON.parse(responseText);
-
-          if (json.status === "PENDING" || json.status === "success") {
-            sheet.getRange(i + 1, statusIndex + 1).setValue("✅");
-          } else {
-            sheet.getRange(i + 1, statusIndex + 1).setValue("❌");
-          }
+          const json = JSON.parse(response.getContentText());
+          const result = (json.status === "PENDING" || json.status === "success") ? "✅" : "❌";
+          sheet.getRange(i + 1, statusIndex + 1).setValue(result);
         } catch (err) {
           sheet.getRange(i + 1, statusIndex + 1).setValue("❌");
         }
@@ -174,3 +143,4 @@ function checkAndSendAll() {
     });
   });
 }
+
