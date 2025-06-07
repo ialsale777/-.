@@ -1,0 +1,39 @@
+function onEdit(e) {
+  const sheet = e.source.getActiveSheet();
+  const sheetName = sheet.getName();
+  if (sheetName === "الورقة6") return;
+
+  const editedRow = e.range.getRow();
+  const editedCol = e.range.getColumn();
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+
+  const actionColIndex = headers.indexOf("إجراء تغيير الموعد") + 1;
+  if (editedCol !== actionColIndex || editedRow === 1) return;
+
+  const value = e.range.getValue()?.toString().trim();
+  if (!value) return;
+
+  const rowData = sheet.getRange(editedRow, 1, 1, sheet.getLastColumn()).getValues()[0];
+
+  if (value === "إلغاء الموعد") {
+    sheet.deleteRow(editedRow);
+    return;
+  }
+
+  const targetSheet = e.source.getSheetByName(value);
+  if (!targetSheet) return;
+
+  const targetHeaders = targetSheet.getRange(1, 1, 1, targetSheet.getLastColumn()).getValues()[0];
+  const lastRow = targetSheet.getLastRow();
+  const insertRow = lastRow + 1;
+
+  // نسخ البيانات للورقة الجديدة
+  targetSheet.getRange(insertRow, 1, 1, rowData.length).setValues([rowData]);
+
+  // نسخ التنسيقات من الصف
+  const formats = sheet.getRange(editedRow, 1, 1, sheet.getLastColumn()).getTextStyles();
+  targetSheet.getRange(insertRow, 1, 1, rowData.length).setTextStyles(formats);
+
+  // حذف الصف من الورقة الأصلية
+  sheet.deleteRow(editedRow);
+}
