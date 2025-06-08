@@ -21,6 +21,8 @@ function refreshDropdownsInAllSheets() {
     range.setDataValidation(rule);
   }
 
-  SpreadsheetApp.getUi().alert("✅ تم تحديث القوائم المنسدلة.");
+  // نهاية دالة refreshDropdownsInAllSheets
+Logger.log("✅ تم تحديث القوائم المنسدلة.");
+
 
 }
