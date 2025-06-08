@@ -1,0 +1,294 @@
+// ✅ تم تعطيل كود النقل وتحديث القائمة المنسدلة مؤقتًا
+
+function onEdit(e) {
+  const sheet = e.source.getActiveSheet();
+  const sheetName = sheet.getName();
+  const range = e.range;
+  const row = range.getRow();
+  const col = range.getColumn();
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+
+  if (sheetName === "الورقة6") return;
+
+  // ✅ كود التكرار لرقم الجواز
+  const passportColIndex = headers.indexOf("رقم الجواز");
+  if (passportColIndex !== -1 && col === passportColIndex + 1 && row !== 1) {
+    const editedValue = range.getValue()?.toString().trim().toLowerCase();
+    if (editedValue) {
+      const allSheets = e.source.getSheets();
+      const currentSheetName = sheet.getName();
+      let duplicateFound = false;
+      let duplicateLocation = "";
+
+      for (let s = 0; s < allSheets.length; s++) {
+        const otherSheet = allSheets[s];
+        const otherName = otherSheet.getName();
+        if (otherName === currentSheetName || otherName === "الورقة6") continue;
+
+        const otherHeaders = otherSheet.getRange(1, 1, 1, otherSheet.getLastColumn()).getValues()[0];
+        const otherPassportIndex = otherHeaders.indexOf("رقم الجواز");
+        if (otherPassportIndex === -1) continue;
+
+        const data = otherSheet.getRange(2, otherPassportIndex + 1, otherSheet.getLastRow() - 1).getValues().flat();
+        const normalizedData = data.map(v => v.toString().trim().toLowerCase());
+
+        if (normalizedData.includes(editedValue)) {
+          duplicateFound = true;
+          duplicateLocation = otherName;
+          break;
+        }
+      }
+
+      const currentData = sheet.getRange(2, passportColIndex + 1, sheet.getLastRow() - 1).getValues().flat();
+      const normalizedCurrentData = currentData.map(v => v.toString().trim().toLowerCase());
+      let duplicateInSameSheet = normalizedCurrentData.filter(v => v === editedValue).length > 1;
+
+      const cell = sheet.getRange(row, col);
+      if (duplicateFound || duplicateInSameSheet) {
+        cell.setBackground("#FFCDD2");
+        let msg = "⚠️ رقم الجواز مكرر ";
+        if (duplicateFound) msg += `في ورقة: ${duplicateLocation} `;
+        if (duplicateInSameSheet) msg += `(أو داخل نفس الورقة)`;
+        SpreadsheetApp.getActive().toast(msg, "تحذير", 6);
+      } else {
+        cell.setBackground(null);
+      }
+    }
+  }
+
+  // ✅ كود التشيك بوكس لجميع الرسائل بما فيها "طلب تحضير الأوراق"
+  const colNames = {
+    "رسالة طلب تحضير الأوراق": "MS",
+    "رسالة اقرار باستلام الورق": "MS1",
+    "رسالة الموعد": "MS2",
+    "رسالة تم التبصيم": "MS3",
+    "رسالة استلام الجواز": "MS4",
+    "رسالة التأجيل": "MS5"
+  };
+
+  for (const triggerColName in colNames) {
+    const triggerIndex = headers.indexOf(triggerColName) + 1;
+    if (col === triggerIndex) {
+      const value = range.getValue();
+      const statusIndex = headers.indexOf(colNames[triggerColName]) + 1;
+      if (value === true) {
+        sheet.getRange(row, statusIndex).setValue("🔁 جاهز");
+      }
+      break;
+    }
+  }
+}
+
+
+function checkAndSendAll() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const allSheets = ss.getSheets();
+
+  allSheets.forEach(sheet => {
+    const name = sheet.getName();
+    if (name === "الورقة6") return;
+
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+    const phoneIndex = headers.indexOf("رقم الجوال");
+
+    const config = [
+      {
+  trigger: "رسالة طلب تحضير الأوراق",
+  status: "MS",
+  message: r => {
+    const name = r["الاسم مطابق للجواز"]?.toString().trim() || "";
+    return `📌 *متطلبات تأشيرة شنغن*\n\n` +
+    `مرحبًا *${name}*،\n\n` +
+    `نرجو تسليم المستندات التالية لبدء إجراءات تأشيرتك:\n\n` +
+    `1. صورتان شخصية حديثة (4.5 × 3.5) بخلفية بيضاء\n` +
+    `2. أصل جواز السفر\n` +
+    `3. صورة من تأشيرة شنغن سابقة (إن وجدت)\n` +
+    `4. صورة الهوية السعودية / الإقامة\n` +
+    `5. خطاب تعريف بالعمل (بالإنجليزية) يحتوي على:\n` +
+    ` - المسمى الوظيفي\n` +
+    ` - الراتب\n` +
+    ` - تاريخ الالتحاق\n` +
+    ` - مصدق من الغرفة التجارية\n` +
+    `6. كشف حساب بنكي لآخر 4 أشهر:\n` +
+    ` - باللغة الإنجليزية\n` +
+    ` - مختوم وصادر من تطبيق البنك\n` +
+    `7. أن لا يقل الرصيد عن 10,000 ريال\n` +
+    `8. نسخة من كرت العائلة (إذا كان السفر عائلي)\n\n` +
+    `📩 *يرجى تسليم الأوراق في أقرب وقت ممكن لتأكيد موعد البصمة.*\n\n` +
+    `⚠️ هذه رسالة تأكيد آلية ولا يجب الرد عليها.`;
+  }
+},
+
+      {
+        trigger: "رسالة الموعد",
+        status: "MS2",
+        message: r => {
+          const name = r["الاسم مطابق للجواز"]?.toString().trim() || "عميلنا";
+          const rawDate = r["تاريخ الموعد"];
+          let dateStr = "غير محدد";
+          let timeStr = "غير محدد";
+
+          if (rawDate instanceof Date) {
+            const tz = Session.getScriptTimeZone();
+            const datePart = Utilities.formatDate(rawDate, tz, "yyyy/MM/dd");
+            const timePart = Utilities.formatDate(rawDate, tz, "hh:mm");
+            const meridian = Utilities.formatDate(rawDate, tz, "a");
+            const meridianAr = meridian === "AM" ? "صباحًا" : "مساءً";
+
+            dateStr = datePart;
+            timeStr = `${timePart} ${meridianAr}`;
+          }
+
+          return `📅 موعدك للتبصيم - تأشيرة شنغن 🇪🇺\n\n` +
+                 `عزيزي العميل *${name}*،\n\n` +
+                 `📍 الموقع: مكتب تجوال للسياحة – برج الحويزي\n` +
+                 `📆 التاريخ: ${dateStr}\n` +
+                 `🕘 الوقت: ${timeStr}\n\n` +
+                 `يرجى الحضور قبل الموعد لأخذ رقم.\n` +
+                 `⚠️ هذه رسالة آلية، لا يلزم الرد.`;
+        }
+      },
+      {
+        trigger: "رسالة اقرار باستلام الورق",
+        status: "MS1",
+        message: r => `📩 *تأكيد استلام الأوراق*\n\nمرحبًا *${r["الاسم مطابق للجواز"] || ""}*،\n\nتم استلام مستندات الطلبات الخاصة بك بنجاح.\n\n⚠️ هذه رسالة آلية، لا يلزم الرد.`
+      },
+      {
+        trigger: "رسالة تم التبصيم",
+        status: "MS3",
+        message: r => {
+          const name = r["الاسم مطابق للجواز"]?.toString().trim() || "";
+          const appNumber = r["رقم الأبلكيشن"]?.toString().trim();
+          const refPart = appNumber ? `\n🔢 رقم المرجع الخاص بك: *${appNumber}*` : "";
+          return `عزيزي العميل *${name}*،\n\nتم التبصيم بنجاح.${refPart}\nمدة معالجة الطلب 12–15 يوم عمل.\n📩 سيتم إشعارك عند جاهزية الجواز.\n\n⚠️ هذه رسالة آلية، لا يلزم الرد.`;
+        }
+      },
+      {
+        trigger: "رسالة استلام الجواز",
+        status: "MS4",
+        message: r => {
+          const name = r["الاسم مطابق للجواز"]?.toString().trim() || "";
+          return `عزيزي العميل *${name}*،\n\nنرجو التفضل بالحضور لاستلام الجواز من مكتب \"تجوال للسياحة\" – برج الحويزي.\n🕘 من 12:00 ظهرًا حتى 10:00 مساءً (عدا الجمعة)\n📍 الموظف: مصطفى شلبي\n\n✈️ نتمنى لك رحلة سعيدة\n⚠️ هذه رسالة آلية، لا يلزم الرد.`;
+        }
+      },
+      {
+        trigger: "رسالة التأجيل",
+        status: "MS5",
+        message: r => {
+          const name = r["الاسم مطابق للجواز"]?.toString().trim() || "عميلنا";
+          const rawData = r["موعد التأجيل"];
+          let dateStr = "غير محدد";
+          let embassy = "";
+
+          if (typeof rawData === "string" && rawData.includes("-")) {
+            const parts = rawData.split("-");
+            embassy = parts[1]?.trim() || "";
+
+            const rawDate = new Date(parts[0].trim());
+            if (!isNaN(rawDate)) {
+              const tz = Session.getScriptTimeZone();
+              dateStr = Utilities.formatDate(rawDate, tz, "yyyy/MM/dd");
+            }
+          }
+
+          return `📢 تم تعديل موعدك للبصمة - تأشيرة شنغن 🇪🇺\n\n` +
+                 `عزيزي العميل *${name}*،\n\n` +
+                 `📍 الموقع: مكتب تجوال للسياحة – برج الحويزي\n` +
+                 `🏛️ السفارة: ${embassy || "غير محددة"}\n` +
+                 `📆 الموعد الجديد: ${dateStr}\n\n` +
+                 `يرجى التواصل مع الموظف المسؤول عن طلبك لتأكيد هذا الموعد أو توضيح عدم مناسبته لك.\n\n` +
+                 `⚠️ هذه رسالة آلية، لا يلزم الرد.`;
+        }
+      }
+    ];
+
+    config.forEach(({ trigger, status, message }) => {
+      const triggerIndex = headers.indexOf(trigger);
+      const statusIndex = headers.indexOf(status);
+      if (triggerIndex === -1 || statusIndex === -1 || phoneIndex === -1) return;
+
+      for (let i = 1; i < data.length; i++) {
+        const row = data[i];
+        const phoneRaw = row[phoneIndex];
+        const statusValue = row[statusIndex];
+
+        if (!row[triggerIndex]) continue;
+        if (statusValue === "✅" || statusValue === "⏳ جاري الإرسال") continue;
+
+        if (statusValue === "🔁 جاهز") {
+          sheet.getRange(i + 1, statusIndex + 1).setValue("⏳ جاري الإرسال");
+          SpreadsheetApp.flush();
+          Logger.log(`⏳ جاري الإرسال - ${phoneRaw}`);
+        }
+
+        let phone = phoneRaw.toString().trim().replace(/^0+/, "");
+        if (!phone.startsWith("966")) phone = "966" + phone;
+
+        const rowObj = {};
+        headers.forEach((h, idx) => rowObj[h] = row[idx]);
+
+        const msg = message(rowObj);
+
+        const body = {
+          number: phone,
+          text: msg
+        };
+
+        const options = {
+          method: 'post',
+          contentType: 'application/json',
+          headers: {
+            'apikey': '878559AC4207-4520-A544-80D3FEB9ED9B'
+          },
+          payload: JSON.stringify(body),
+          muteHttpExceptions: true
+        };
+
+        try {
+          const response = UrlFetchApp.fetch("https://w.eh4.me/message/sendText/ABD1", options);
+          const json = JSON.parse(response.getContentText());
+          const result = (json.status === "PENDING" || json.status === "success") ? "✅" : "❌";
+          sheet.getRange(i + 1, statusIndex + 1).setValue(result);
+          Logger.log(`📤 إرسال إلى ${phone} | ${result} | ${trigger}`);
+
+         if (["رسالة الموعد", "رسالة التأجيل", "رسالة طلب تحضير الأوراق"].includes(trigger)) {
+
+            Utilities.sleep(Math.floor(Math.random() * (15000 - 5000 + 1)) + 5000);
+          }
+        } catch (err) {
+          sheet.getRange(i + 1, statusIndex + 1).setValue("❌");
+          Logger.log(`❌ خطأ في الإرسال إلى ${phone}: ${err.message}`);
+        }
+      }
+    });
+  });
+}
+function checkDuplicatesManually() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheets = ss.getSheets();
+  
+  for (const sheet of sheets) {
+    const sheetName = sheet.getName();
+    if (sheetName === "الورقة6") continue;
+
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+    const passportIndex = headers.indexOf("رقم الجواز");
+    if (passportIndex === -1) continue;
+
+    const allPassports = [];
+    for (let i = 1; i < data.length; i++) {
+      const val = data[i][passportIndex]?.toString().trim().toLowerCase();
+      if (!val) continue;
+
+      const cell = sheet.getRange(i + 1, passportIndex + 1);
+      if (allPassports.includes(val)) {
+        cell.setBackground("#FFCDD2"); // مكرر - أحمر فاتح
+      } else {
+        allPassports.push(val);
+        cell.setBackground(null); // إزالة التلوين
+      }
+    }
+  }
+}
