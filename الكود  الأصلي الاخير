@@ -46,6 +46,12 @@ function manualRun() {
     if (!target) {
       target = sheet.insertSheet(sheetNameFull);
       target.setFrozenRows(1);
+      // تجميد حتى عمود "تاريخ إصدار الجواز"
+const freezeUntil = cleanHeader.indexOf("تاريخ انتهاء الجواز") + 1;
+if (freezeUntil > 1) {
+  target.setFrozenColumns(freezeUntil);
+}
+
       target.getRange(1, 1, 1, cleanHeader.length).setValues([cleanHeader]);
 
       for (let c = 0; c < cleanHeader.length; c++) {
@@ -106,6 +112,29 @@ function manualRun() {
 
       const targetRowNum = target.getLastRow() + 1;
       target.getRange(targetRowNum, 1, 1, cleanRow.length).setValues([cleanRow]);
+      // نسخ التنسيقات من الصف 2 في masterSheet لنفس الأعمدة
+const formatSourceRange = masterSheet.getRange(2, startCol + 1, 1, cleanRow.length);
+const formatTargetRange = target.getRange(targetRowNum, 1, 1, cleanRow.length);
+formatSourceRange.copyTo(formatTargetRange, SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+
+      // 🔻 إعداد القائمة المنسدلة في عمود "إجراء تغيير الموعد"
+const changeColIndex = cleanHeader.indexOf("إجراء تغيير الموعد");
+if (changeColIndex !== -1) {
+  const allSheetNames = sheet.getSheets()
+    .map(s => s.getName())
+    .filter(n => n !== "الورقة6");
+
+  allSheetNames.push("إلغاء الموعد");
+
+  const rule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(allSheetNames, true)
+    .setAllowInvalid(false)
+    .build();
+
+  const col = changeColIndex + 1;
+  const targetRange = target.getRange(2, col, target.getLastRow() - 1);
+  targetRange.setDataValidation(rule);
+}
 
       const checkboxCols = ["رسالة التأجيل", "رسالة اقرار باستلام الورق", "رسالة الموعد", "رسالة تم التبصيم", "رسالة استلام الجواز"];
       checkboxCols.forEach(colName => {
