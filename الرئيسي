@@ -299,5 +299,6 @@ function retryFailedConfirmations() {
     }
   });
 
-  SpreadsheetApp.getUi().alert("✅ تمت إعادة المحاولة. راجع Logger للتفاصيل.");
+  Logger.log("✅ تمت إعادة المحاولة. راجع السجل (Logger) للتفاصيل.");
+
 }
