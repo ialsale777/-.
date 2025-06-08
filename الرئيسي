@@ -1,0 +1,303 @@
+const EVOLUTION_API_URL = "https://w.eh4.me/message/sendText/ABD1";
+const EVOLUTION_API_KEY = "878559AC4207-4520-A544-80D3FEB9ED9B";
+
+function manualRun() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet();
+  const masterSheet = sheet.getSheetByName("الورقة6");
+  const allData = masterSheet.getDataRange().getValues();
+  const header = allData[0];
+
+  const passportIndex = header.indexOf("رقم الجواز");
+  const dateIndex = header.indexOf("مواعيد البصمة");
+  let statusIndex = header.indexOf("تم النقل");
+
+  const startCol = 2;
+
+  if (statusIndex === -1) {
+    statusIndex = header.length;
+    masterSheet.getRange(1, statusIndex + 1).setValue("تم النقل");
+  }
+
+  const excludeColumns = ["تم النقل", "مواعيد البصمة"];
+  const allowedHeader = header
+    .map((col, idx) => ({ name: col, idx }))
+    .filter((col) => col.idx >= startCol && !excludeColumns.includes(col.name));
+  const allowedIndexes = allowedHeader.map(col => col.idx);
+  let cleanHeader = allowedHeader.map(col => col.name);
+
+  const birthDateIndexInAllowed = cleanHeader.indexOf("تاريخ الميلاد");
+  if (birthDateIndexInAllowed !== -1) {
+    cleanHeader.splice(birthDateIndexInAllowed + 1, 0, "العمر");
+  }
+
+  for (let i = 1; i < allData.length; i++) {
+    const row = allData[i];
+    const passport = row[passportIndex];
+    const date = row[dateIndex];
+    const status = row[statusIndex];
+
+    if (!passport || !date || status === "✅") continue;
+
+    const sheetNameFull = date.toString().trim();
+    const baseName = sheetNameFull.replace(/\(\d+\)/, '').trim();
+
+    let target = sheet.getSheets().find(s => s.getName().startsWith(baseName));
+
+    if (!target) {
+      target = sheet.insertSheet(sheetNameFull);
+      target.setFrozenRows(1);
+      // تجميد حتى عمود "تاريخ إصدار الجواز"
+const freezeUntil = cleanHeader.indexOf("تاريخ انتهاء الجواز") + 1;
+if (freezeUntil > 1) {
+  target.setFrozenColumns(freezeUntil);
+}
+
+      target.getRange(1, 1, 1, cleanHeader.length).setValues([cleanHeader]);
+
+      for (let c = 0; c < cleanHeader.length; c++) {
+        const originalIndex = (c <= birthDateIndexInAllowed)
+          ? allowedIndexes[c]
+          : allowedIndexes[c - 1];
+
+        if (originalIndex !== undefined) {
+          const sourceCell = masterSheet.getRange(1, originalIndex + 1);
+          const targetCell = target.getRange(1, c + 1);
+          sourceCell.copyTo(targetCell, SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+          targetCell.setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
+          const colWidth = masterSheet.getColumnWidth(originalIndex + 1);
+          target.setColumnWidth(c + 1, colWidth);
+        } else {
+          target.setColumnWidth(c + 1, 100);
+        }
+      }
+    }
+
+    let passportExists = false;
+    for (const currentSheet of sheet.getSheets()) {
+      if (currentSheet.getName() === "الورقة6") continue;
+      const sheetData = currentSheet.getDataRange().getValues();
+      const passportIdx = sheetData[0].indexOf("رقم الجواز");
+      if (passportIdx !== -1 && sheetData.slice(1).some(r => r[passportIdx] === passport)) {
+        passportExists = true;
+        break;
+      }
+    }
+
+    if (!passportExists) {
+      const currentCount = target.getLastRow() - 1;
+      const maxAllowed = parseInt((target.getName().match(/\((\d+)\)/) || [])[1]) || 30;
+
+      if (currentCount >= maxAllowed) {
+        SpreadsheetApp.getActive().toast(`❌ تم الوصول للحد الأقصى (${maxAllowed}) في الورقة: ${target.getName()}`, "تنبيه", 6);
+        continue;
+      }
+
+      let cleanRow = allowedIndexes.map(idx => row[idx]);
+
+      let birthDateValue = cleanRow[birthDateIndexInAllowed];
+      let age = "";
+      if (typeof birthDateValue === "string") {
+        birthDateValue = new Date(birthDateValue);
+      }
+      if (birthDateValue instanceof Date && !isNaN(birthDateValue)) {
+        const today = new Date();
+        age = today.getFullYear() - birthDateValue.getFullYear();
+        const m = today.getMonth() - birthDateValue.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < birthDateValue.getDate())) {
+          age--;
+        }
+      }
+
+      cleanRow.splice(birthDateIndexInAllowed + 1, 0, age);
+
+      const targetRowNum = target.getLastRow() + 1;
+      target.getRange(targetRowNum, 1, 1, cleanRow.length).setValues([cleanRow]);
+      // نسخ التنسيقات من الصف 2 في masterSheet لنفس الأعمدة
+const formatSourceRange = masterSheet.getRange(2, startCol + 1, 1, cleanRow.length);
+const formatTargetRange = target.getRange(targetRowNum, 1, 1, cleanRow.length);
+formatSourceRange.copyTo(formatTargetRange, SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+
+      // 🔻 إعداد القائمة المنسدلة في عمود "إجراء تغيير الموعد"
+const changeColIndex = cleanHeader.indexOf("إجراء تغيير الموعد");
+if (changeColIndex !== -1) {
+  const allSheetNames = sheet.getSheets()
+    .map(s => s.getName())
+    .filter(n => n !== "الورقة6");
+
+  allSheetNames.push("إلغاء الموعد");
+
+  const rule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(allSheetNames, true)
+    .setAllowInvalid(false)
+    .build();
+
+  const col = changeColIndex + 1;
+  const targetRange = target.getRange(2, col, target.getLastRow() - 1);
+  targetRange.setDataValidation(rule);
+}
+
+     const checkboxCols = [
+  "رسالة طلب تحضير الأوراق",
+  "رسالة التأجيل",
+  "رسالة اقرار باستلام الورق",
+  "رسالة الموعد",
+  "رسالة تم التبصيم",
+  "رسالة استلام الجواز"
+];
+
+      checkboxCols.forEach(colName => {
+        const colIndex = cleanHeader.indexOf(colName);
+        if (colIndex !== -1) target.getRange(targetRowNum, colIndex + 1).insertCheckboxes();
+      });
+
+      masterSheet.getRange(i + 1, statusIndex + 1).setValue("✅");
+
+      const nameIndex = cleanHeader.indexOf("الاسم مطابق للجواز");
+      const phoneIndex = cleanHeader.indexOf("رقم الجوال");
+      const statusConfirmIndex = cleanHeader.indexOf("رسالة تأكيد الحجز");
+
+      let confirmPhone = cleanRow[phoneIndex];
+      let confirmName = cleanRow[nameIndex];
+      if (confirmPhone && statusConfirmIndex !== -1) {
+        confirmPhone = confirmPhone.toString().trim().replace(/^0+/, "");
+        if (!confirmPhone.startsWith("966")) confirmPhone = "966" + confirmPhone;
+
+        const visaDateMatch = sheetNameFull.match(/^(\d+)([A-Z]{3})/);
+        let visaDate = "غير محدد";
+        if (visaDateMatch) {
+          const day = visaDateMatch[1];
+          const monthEng = visaDateMatch[2];
+          const monthMap = {
+            JAN: "يناير", FEB: "فبراير", MAR: "مارس", APR: "أبريل",
+            MAY: "مايو", JUN: "يونيو", JUL: "يوليو", AUG: "أغسطس",
+            SEP: "سبتمبر", OCT: "أكتوبر", NOV: "نوفمبر", DEC: "ديسمبر"
+          };
+          visaDate = `*${day} ${monthMap[monthEng] || monthEng}*`;
+        }
+
+        const message =
+          `📌 مرحبًا *${confirmName || ""}*،\n` +
+          `تم تأكيد حجز موعد البصمة الشنغن الخاص بك بتاريخ ${visaDate}.\n\n` +
+          `سيتم التواصل معك من قبل الموظف في حال الحاجة لأي تفاصيل إضافية.\n` +
+          `⚠️ هذه رسالة تأكيد آلية ولا يجب الرد عليها.`;
+
+        const body = {
+          number: confirmPhone,
+          text: message
+        };
+
+        const options = {
+          method: 'post',
+          contentType: 'application/json',
+          headers: {
+            'apikey': EVOLUTION_API_KEY
+          },
+          payload: JSON.stringify(body),
+          muteHttpExceptions: true
+        };
+
+        let sendStatus = "❌";
+        try {
+          const response = UrlFetchApp.fetch(EVOLUTION_API_URL, options);
+          const json = JSON.parse(response.getContentText());
+          sendStatus = json.status === "PENDING" || json.status === "success" ? "✅" : "❌";
+        } catch (err) {}
+
+        if (sendStatus === "❌") {
+          Utilities.sleep(5000);
+          try {
+            const retryResponse = UrlFetchApp.fetch(EVOLUTION_API_URL, options);
+            const retryJson = JSON.parse(retryResponse.getContentText());
+            sendStatus = retryJson.status === "PENDING" || retryJson.status === "success" ? "✅" : "❌";
+          } catch (retryErr) {}
+        }
+
+        target.getRange(targetRowNum, statusConfirmIndex + 1).setValue(sendStatus);
+
+        Logger.log(
+          `📄 [${sheetNameFull}]\n👤 الاسم: ${confirmName}\n📱 الجوال: ${confirmPhone}\n📨 الحالة: ${sendStatus}\n---\n${message}\n==========================\n`
+        );
+      }
+    }
+  }
+} 
+
+function retryFailedConfirmations() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const allSheets = ss.getSheets();
+
+  allSheets.forEach(sheet => {
+    const sheetName = sheet.getName();
+    if (sheetName === "الورقة6") return;
+
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+
+    const phoneIndex = headers.indexOf("رقم الجوال");
+    const nameIndex = headers.indexOf("الاسم مطابق للجواز");
+    const statusIndex = headers.indexOf("رسالة تأكيد الحجز");
+
+    if (phoneIndex === -1 || nameIndex === -1 || statusIndex === -1) return;
+
+    const visaDateMatch = sheetName.match(/^(\d+)([A-Z]{3})/);
+    let visaDate = "غير محدد";
+    if (visaDateMatch) {
+      const day = visaDateMatch[1];
+      const monthEng = visaDateMatch[2];
+      const monthMap = {
+        JAN: "يناير", FEB: "فبراير", MAR: "مارس", APR: "أبريل",
+        MAY: "مايو", JUN: "يونيو", JUL: "يوليو", AUG: "أغسطس",
+        SEP: "سبتمبر", OCT: "أكتوبر", NOV: "نوفمبر", DEC: "ديسمبر"
+      };
+      visaDate = `*${day} ${monthMap[monthEng] || monthEng}*`;
+    }
+
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      const phoneRaw = row[phoneIndex];
+      const name = row[nameIndex];
+      const status = row[statusIndex];
+
+      if (status !== "❌") continue;
+
+      let phone = phoneRaw.toString().trim().replace(/^0+/, "");
+      if (!phone.startsWith("966")) phone = "966" + phone;
+
+      const message =
+        `📌 مرحبًا *${name || ""}*،\n` +
+        `تم تأكيد حجز موعد البصمة الشنغن الخاص بك بتاريخ ${visaDate}.\n\n` +
+        `سيتم التواصل معك من قبل الموظف في حال الحاجة لأي تفاصيل إضافية.\n` +
+        `⚠️ هذه رسالة تأكيد آلية ولا يجب الرد عليها.`;
+
+      const body = {
+        number: phone,
+        text: message
+      };
+
+      const options = {
+        method: 'post',
+        contentType: 'application/json',
+        headers: {
+          'apikey': EVOLUTION_API_KEY
+        },
+        payload: JSON.stringify(body),
+        muteHttpExceptions: true
+      };
+
+      let sendStatus = "❌";
+      try {
+        const response = UrlFetchApp.fetch(EVOLUTION_API_URL, options);
+        const json = JSON.parse(response.getContentText());
+        sendStatus = json.status === "PENDING" || json.status === "success" ? "✅" : "❌";
+      } catch (err) {}
+
+      sheet.getRange(i + 1, statusIndex + 1).setValue(sendStatus);
+
+      Logger.log(
+        `📄 [${sheetName}]\n👤 الاسم: ${name}\n📱 الجوال: ${phone}\n📨 الحالة: ${sendStatus}\n---\n${message}\n==========================\n`
+      );
+    }
+  });
+
+  SpreadsheetApp.getUi().alert("✅ تمت إعادة المحاولة. راجع Logger للتفاصيل.");
+}
