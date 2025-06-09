@@ -176,30 +176,44 @@ function checkAndSendAll() {
         trigger: "رسالة التأجيل",
         status: "MS5",
         message: r => {
-          const name = r["الاسم مطابق للجواز"]?.toString().trim() || "عميلنا";
-          const rawData = r["موعد التأجيل"];
-          let dateStr = "غير محدد";
-          let embassy = "";
+  const name = r["الاسم مطابق للجواز"]?.toString().trim() || "عميلنا";
+  const rawData = r["موعد التأجيل"];
+  let dateStr = "غير محدد";
+  let dayName = "";
+  let embassy = "";
 
-          if (typeof rawData === "string" && rawData.includes("-")) {
-            const parts = rawData.split("-");
-            embassy = parts[1]?.trim() || "";
+  const dayTranslations = {
+    Sunday: "الأحد",
+    Monday: "الاثنين",
+    Tuesday: "الثلاثاء",
+    Wednesday: "الأربعاء",
+    Thursday: "الخميس",
+    Friday: "الجمعة",
+    Saturday: "السبت"
+  };
 
-            const rawDate = new Date(parts[0].trim());
-            if (!isNaN(rawDate)) {
-              const tz = Session.getScriptTimeZone();
-              dateStr = Utilities.formatDate(rawDate, tz, "yyyy/MM/dd");
-            }
-          }
+  if (typeof rawData === "string" && rawData.includes("-")) {
+    const parts = rawData.split("-");
+    embassy = parts[1]?.trim() || "";
 
-          return `📢 تم تعديل موعدك للبصمة - تأشيرة شنغن 🇪🇺\n\n` +
-                 `عزيزي العميل *${name}*،\n\n` +
-                 `📍 الموقع: مكتب تجوال للسياحة – برج الحويزي\n` +
-                 `🏛️ السفارة: ${embassy || "غير محددة"}\n` +
-                 `📆 الموعد الجديد: ${dateStr}\n\n` +
-                 `يرجى التواصل مع الموظف المسؤول عن طلبك لتأكيد هذا الموعد أو توضيح عدم مناسبته لك.\n\n` +
-                 `⚠️ هذه رسالة آلية، لا يلزم الرد.`;
-        }
+    const rawDate = new Date(parts[0].trim());
+    if (!isNaN(rawDate)) {
+      const tz = Session.getScriptTimeZone();
+      const engDay = Utilities.formatDate(rawDate, tz, "EEEE");
+      dayName = dayTranslations[engDay] || engDay;
+      dateStr = Utilities.formatDate(rawDate, tz, "yyyy/MM/dd");
+    }
+  }
+
+  return `📢 تم تعديل موعدك للبصمة - تأشيرة شنغن 🇪🇺\n\n` +
+         `عزيزي العميل *${name}*،\n\n` +
+         `📍 الموقع: مكتب تجوال للسياحة – برج الحويزي\n` +
+         `🏛️ السفارة: ${embassy || "غير محددة"}\n` +
+         `📆 الموعد الجديد: *${dayName}* ${dateStr}\n\n` +
+         `يرجى التواصل مع الموظف المسؤول عن طلبك لتأكيد هذا الموعد أو توضيح عدم مناسبته لك.\n\n` +
+         `⚠️ هذه رسالة آلية، لا يلزم الرد.`;
+}
+
       }
     ];
 
