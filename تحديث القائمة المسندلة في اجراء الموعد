@@ -2,7 +2,9 @@ function refreshDropdownsInAllSheets() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheets = ss.getSheets();
   const sheetNames = sheets.map(s => s.getName()).filter(name => name !== "الورقة6");
-  const dropdownOptions = [...sheetNames, "إلغاء الموعد"];
+
+  // ✅ وضع "إلغاء الموعد" و"موافق لتأجيل الموعد" أول القائمة
+  const dropdownOptions = ["إلغاء الموعد", "موافق لتأجيل الموعد", ...sheetNames];
 
   for (const sheet of sheets) {
     const name = sheet.getName();
@@ -13,6 +15,8 @@ function refreshDropdownsInAllSheets() {
     if (dropdownColIndex === -1) continue;
 
     const lastRow = sheet.getLastRow();
+    if (lastRow < 2) continue; // لا يوجد بيانات لتطبيق القائمة
+
     const range = sheet.getRange(2, dropdownColIndex + 1, lastRow - 1); // من الصف 2 لأن 1 رؤوس
     const rule = SpreadsheetApp.newDataValidation()
       .requireValueInList(dropdownOptions, true)
@@ -21,8 +25,5 @@ function refreshDropdownsInAllSheets() {
     range.setDataValidation(rule);
   }
 
-  // نهاية دالة refreshDropdownsInAllSheets
-Logger.log("✅ تم تحديث القوائم المنسدلة.");
-
-
+  Logger.log("✅ تم تحديث القوائم المنسدلة.");
 }
