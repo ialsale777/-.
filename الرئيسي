@@ -1,5 +1,5 @@
-const EVOLUTION_API_URL = "https://w.eh4.me/message/sendText/ABD1";
-const EVOLUTION_API_KEY = "878559AC4207-4520-A544-80D3FEB9ED9B";
+const EVOLUTION_API_URL = "https://w.eh4.me/message/sendText/ABD";
+const EVOLUTION_API_KEY = "1E6246D30C21-468E-9B9C-F0BAB1F085A7";
 
 function manualRun() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet();
@@ -10,7 +10,6 @@ function manualRun() {
   const passportIndex = header.indexOf("رقم الجواز");
   const dateIndex = header.indexOf("مواعيد البصمة");
   let statusIndex = header.indexOf("تم النقل");
-
   const startCol = 2;
 
   if (statusIndex === -1) {
@@ -46,26 +45,20 @@ function manualRun() {
     if (!target) {
       target = sheet.insertSheet(sheetNameFull);
       target.setFrozenRows(1);
-      // تجميد حتى عمود "تاريخ إصدار الجواز"
-const freezeUntil = cleanHeader.indexOf("تاريخ انتهاء الجواز") + 1;
-if (freezeUntil > 1) {
-  target.setFrozenColumns(freezeUntil);
-}
-
+      const freezeUntil = cleanHeader.indexOf("تاريخ انتهاء الجواز") + 1;
+      if (freezeUntil > 1) target.setFrozenColumns(freezeUntil);
       target.getRange(1, 1, 1, cleanHeader.length).setValues([cleanHeader]);
 
       for (let c = 0; c < cleanHeader.length; c++) {
         const originalIndex = (c <= birthDateIndexInAllowed)
           ? allowedIndexes[c]
           : allowedIndexes[c - 1];
-
         if (originalIndex !== undefined) {
           const sourceCell = masterSheet.getRange(1, originalIndex + 1);
           const targetCell = target.getRange(1, c + 1);
           sourceCell.copyTo(targetCell, SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
           targetCell.setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
-          const colWidth = masterSheet.getColumnWidth(originalIndex + 1);
-          target.setColumnWidth(c + 1, colWidth);
+          target.setColumnWidth(c + 1, masterSheet.getColumnWidth(originalIndex + 1));
         } else {
           target.setColumnWidth(c + 1, 100);
         }
@@ -86,7 +79,6 @@ if (freezeUntil > 1) {
     if (!passportExists) {
       const currentCount = target.getLastRow() - 1;
       const maxAllowed = parseInt((target.getName().match(/\((\d+)\)/) || [])[1]) || 30;
-
       if (currentCount >= maxAllowed) {
         SpreadsheetApp.getActive().toast(`❌ تم الوصول للحد الأقصى (${maxAllowed}) في الورقة: ${target.getName()}`, "تنبيه", 6);
         continue;
@@ -94,64 +86,66 @@ if (freezeUntil > 1) {
 
       let cleanRow = allowedIndexes.map(idx => row[idx]);
 
+      // 🟡 حساب العمر
       let birthDateValue = cleanRow[birthDateIndexInAllowed];
       let age = "";
-      if (typeof birthDateValue === "string") {
-        birthDateValue = new Date(birthDateValue);
-      }
+      if (typeof birthDateValue === "string") birthDateValue = new Date(birthDateValue);
       if (birthDateValue instanceof Date && !isNaN(birthDateValue)) {
         const today = new Date();
         age = today.getFullYear() - birthDateValue.getFullYear();
         const m = today.getMonth() - birthDateValue.getMonth();
-        if (m < 0 || (m === 0 && today.getDate() < birthDateValue.getDate())) {
-          age--;
-        }
+        if (m < 0 || (m === 0 && today.getDate() < birthDateValue.getDate())) age--;
       }
-
       cleanRow.splice(birthDateIndexInAllowed + 1, 0, age);
 
+      // 🔐 كود الاستلام العشوائي
+      const pickupCodeIndex = cleanHeader.indexOf("كود الاستلام");
+      if (pickupCodeIndex !== -1) {
+        const randomCode = Math.floor(1000 + Math.random() * 9000);
+        cleanRow.splice(pickupCodeIndex, 0, randomCode);
+      }
+
+      // ⬇️ إدخال البيانات
       const targetRowNum = target.getLastRow() + 1;
       target.getRange(targetRowNum, 1, 1, cleanRow.length).setValues([cleanRow]);
-      // نسخ التنسيقات من الصف 2 في masterSheet لنفس الأعمدة
-const formatSourceRange = masterSheet.getRange(2, startCol + 1, 1, cleanRow.length);
-const formatTargetRange = target.getRange(targetRowNum, 1, 1, cleanRow.length);
-formatSourceRange.copyTo(formatTargetRange, SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
 
-      // 🔻 إعداد القائمة المنسدلة في عمود "إجراء تغيير الموعد"
-const changeColIndex = cleanHeader.indexOf("إجراء تغيير الموعد");
-if (changeColIndex !== -1) {
-  const allSheetNames = sheet.getSheets()
-    .map(s => s.getName())
-    .filter(n => n !== "الورقة6");
+      // 📋 نسخ التنسيقات من الورقة الرئيسية
+      const formatSourceRange = masterSheet.getRange(2, startCol + 1, 1, cleanRow.length);
+      const formatTargetRange = target.getRange(targetRowNum, 1, 1, cleanRow.length);
+      formatSourceRange.copyTo(formatTargetRange, SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
 
-  allSheetNames.push("إلغاء الموعد");
+      // 🔻 القائمة المنسدلة لتغيير الموعد
+      const changeColIndex = cleanHeader.indexOf("إجراء تغيير الموعد");
+      if (changeColIndex !== -1) {
+        const allSheetNames = sheet.getSheets().map(s => s.getName()).filter(n => n !== "الورقة6");
+        allSheetNames.push("إلغاء الموعد");
+        const rule = SpreadsheetApp.newDataValidation()
+          .requireValueInList(allSheetNames, true)
+          .setAllowInvalid(false).build();
+        const col = changeColIndex + 1;
+        const targetRange = target.getRange(2, col, target.getLastRow() - 1);
+        targetRange.setDataValidation(rule);
+      }
 
-  const rule = SpreadsheetApp.newDataValidation()
-    .requireValueInList(allSheetNames, true)
-    .setAllowInvalid(false)
-    .build();
-
-  const col = changeColIndex + 1;
-  const targetRange = target.getRange(2, col, target.getLastRow() - 1);
-  targetRange.setDataValidation(rule);
-}
-
-     const checkboxCols = [
-  "رسالة طلب تحضير الأوراق",
-  "رسالة التأجيل",
-  "رسالة اقرار باستلام الورق",
-  "رسالة الموعد",
-  "رسالة تم التبصيم",
-  "رسالة استلام الجواز"
-];
-
+      // ✅ Checkboxes
+      const checkboxCols = [
+        "رسالة طلب تحضير الأوراق",
+        "رسالة التأجيل",
+        "رسالة اقرار باستلام الورق",
+        "رسالة الموعد",
+        "رسالة تم التبصيم",
+        "رسالة استلام الجواز",
+        "تم الاستلام"
+      ];
       checkboxCols.forEach(colName => {
         const colIndex = cleanHeader.indexOf(colName);
         if (colIndex !== -1) target.getRange(targetRowNum, colIndex + 1).insertCheckboxes();
       });
 
+      // ✅ تحديث حالة النقل
       masterSheet.getRange(i + 1, statusIndex + 1).setValue("✅");
 
+      // ✉️ إرسال رسالة تأكيد الحجز
       const nameIndex = cleanHeader.indexOf("الاسم مطابق للجواز");
       const phoneIndex = cleanHeader.indexOf("رقم الجوال");
       const statusConfirmIndex = cleanHeader.indexOf("رسالة تأكيد الحجز");
@@ -189,9 +183,7 @@ if (changeColIndex !== -1) {
         const options = {
           method: 'post',
           contentType: 'application/json',
-          headers: {
-            'apikey': EVOLUTION_API_KEY
-          },
+          headers: { 'apikey': EVOLUTION_API_KEY },
           payload: JSON.stringify(body),
           muteHttpExceptions: true
         };
@@ -200,7 +192,7 @@ if (changeColIndex !== -1) {
         try {
           const response = UrlFetchApp.fetch(EVOLUTION_API_URL, options);
           const json = JSON.parse(response.getContentText());
-          sendStatus = json.status === "PENDING" || json.status === "success" ? "✅" : "❌";
+          sendStatus = (json.status === "PENDING" || json.status === "success") ? "✅" : "❌";
         } catch (err) {}
 
         if (sendStatus === "❌") {
@@ -208,7 +200,7 @@ if (changeColIndex !== -1) {
           try {
             const retryResponse = UrlFetchApp.fetch(EVOLUTION_API_URL, options);
             const retryJson = JSON.parse(retryResponse.getContentText());
-            sendStatus = retryJson.status === "PENDING" || retryJson.status === "success" ? "✅" : "❌";
+            sendStatus = (retryJson.status === "PENDING" || retryJson.status === "success") ? "✅" : "❌";
           } catch (retryErr) {}
         }
 
@@ -220,85 +212,4 @@ if (changeColIndex !== -1) {
       }
     }
   }
-} 
-
-function retryFailedConfirmations() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const allSheets = ss.getSheets();
-
-  allSheets.forEach(sheet => {
-    const sheetName = sheet.getName();
-    if (sheetName === "الورقة6") return;
-
-    const data = sheet.getDataRange().getValues();
-    const headers = data[0];
-
-    const phoneIndex = headers.indexOf("رقم الجوال");
-    const nameIndex = headers.indexOf("الاسم مطابق للجواز");
-    const statusIndex = headers.indexOf("رسالة تأكيد الحجز");
-
-    if (phoneIndex === -1 || nameIndex === -1 || statusIndex === -1) return;
-
-    const visaDateMatch = sheetName.match(/^(\d+)([A-Z]{3})/);
-    let visaDate = "غير محدد";
-    if (visaDateMatch) {
-      const day = visaDateMatch[1];
-      const monthEng = visaDateMatch[2];
-      const monthMap = {
-        JAN: "يناير", FEB: "فبراير", MAR: "مارس", APR: "أبريل",
-        MAY: "مايو", JUN: "يونيو", JUL: "يوليو", AUG: "أغسطس",
-        SEP: "سبتمبر", OCT: "أكتوبر", NOV: "نوفمبر", DEC: "ديسمبر"
-      };
-      visaDate = `*${day} ${monthMap[monthEng] || monthEng}*`;
-    }
-
-    for (let i = 1; i < data.length; i++) {
-      const row = data[i];
-      const phoneRaw = row[phoneIndex];
-      const name = row[nameIndex];
-      const status = row[statusIndex];
-
-      if (status !== "❌") continue;
-
-      let phone = phoneRaw.toString().trim().replace(/^0+/, "");
-      if (!phone.startsWith("966")) phone = "966" + phone;
-
-      const message =
-        `📌 مرحبًا *${name || ""}*،\n` +
-        `تم تأكيد حجز موعد البصمة الشنغن الخاص بك بتاريخ ${visaDate}.\n\n` +
-        `سيتم التواصل معك من قبل الموظف في حال الحاجة لأي تفاصيل إضافية.\n` +
-        `⚠️ هذه رسالة تأكيد آلية ولا يجب الرد عليها.`;
-
-      const body = {
-        number: phone,
-        text: message
-      };
-
-      const options = {
-        method: 'post',
-        contentType: 'application/json',
-        headers: {
-          'apikey': EVOLUTION_API_KEY
-        },
-        payload: JSON.stringify(body),
-        muteHttpExceptions: true
-      };
-
-      let sendStatus = "❌";
-      try {
-        const response = UrlFetchApp.fetch(EVOLUTION_API_URL, options);
-        const json = JSON.parse(response.getContentText());
-        sendStatus = json.status === "PENDING" || json.status === "success" ? "✅" : "❌";
-      } catch (err) {}
-
-      sheet.getRange(i + 1, statusIndex + 1).setValue(sendStatus);
-
-      Logger.log(
-        `📄 [${sheetName}]\n👤 الاسم: ${name}\n📱 الجوال: ${phone}\n📨 الحالة: ${sendStatus}\n---\n${message}\n==========================\n`
-      );
-    }
-  });
-
-  Logger.log("✅ تمت إعادة المحاولة. راجع السجل (Logger) للتفاصيل.");
-
 }
