@@ -1,7 +1,6 @@
 const EVOLUTION_API_URL = "https://w.eh4.me/message/sendText/ABD1";
 const EVOLUTION_API_KEY = "878559AC4207-4520-A544-80D3FEB9ED9B";
 
-
 function manualRun() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet();
   const masterSheet = sheet.getSheetByName("الورقة6");
@@ -110,12 +109,31 @@ function manualRun() {
       const targetRowNum = target.getLastRow() + 1;
       target.getRange(targetRowNum, 1, 1, cleanRow.length).setValues([cleanRow]);
 
-      // 📋 نسخ التنسيقات من الورقة الرئيسية
+      // 📋 نسخ التنسيقات
       const formatSourceRange = masterSheet.getRange(2, startCol + 1, 1, cleanRow.length);
       const formatTargetRange = target.getRange(targetRowNum, 1, 1, cleanRow.length);
       formatSourceRange.copyTo(formatTargetRange, SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
 
-      // 🔻 القائمة المنسدلة لتغيير الموعد
+      // 🎨 التلوين حسب العمر
+      SpreadsheetApp.flush();
+      const headers = target.getRange(1, 1, 1, target.getLastColumn()).getValues()[0];
+      const ageColIndex = headers.findIndex(h => h.toString().trim() === "العمر");
+      if (ageColIndex !== -1) {
+        const ageCell = target.getRange(targetRowNum, ageColIndex + 1);
+        const ageNum = parseInt(age, 10);
+        ageCell.setValue(ageNum); // نكسر المعادلة
+        if (!isNaN(ageNum)) {
+          if (ageNum < 6) {
+            ageCell.setBackground("#FCE4EC");
+          } else if (ageNum < 12) {
+            ageCell.setBackground("#E8F5E9");
+          } else {
+            ageCell.setBackground("#FFFFFF");
+          }
+        }
+      }
+
+      // 🔻 القائمة المنسدلة
       const changeColIndex = cleanHeader.indexOf("إجراء تغيير الموعد");
       if (changeColIndex !== -1) {
         const allSheetNames = sheet.getSheets().map(s => s.getName()).filter(n => n !== "الورقة6");
@@ -143,7 +161,7 @@ function manualRun() {
         if (colIndex !== -1) target.getRange(targetRowNum, colIndex + 1).insertCheckboxes();
       });
 
-      // ✅ تحديث حالة النقل
+      // 🔄 تحديث حالة النقل
       masterSheet.getRange(i + 1, statusIndex + 1).setValue("✅");
 
       // ✉️ إرسال رسالة تأكيد الحجز
