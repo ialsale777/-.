@@ -1,5 +1,5 @@
-const EVOLUTION_API_URL = "https://w.eh4.me/message/sendText/ABD";
-const EVOLUTION_API_KEY = "1E6246D30C21-468E-9B9C-F0BAB1F085A7";
+const EVOLUTION_API_URL = "https://w.eh4.me/message/sendText/ABD1";
+const EVOLUTION_API_KEY = "878559AC4207-4520-A544-80D3FEB9ED9B";
 
 function manualRun() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet();
@@ -108,6 +108,17 @@ function manualRun() {
       // ⬇️ إدخال البيانات
       const targetRowNum = target.getLastRow() + 1;
       target.getRange(targetRowNum, 1, 1, cleanRow.length).setValues([cleanRow]);
+const ageCell = target.getRange(targetRowNum, birthDateIndexInAllowed + 2);
+const ageNum = Number(age);
+if (!isNaN(ageNum) && age !== "") {
+  if (ageNum < 7) {
+    ageCell.setBackground("#FFE0B2"); // برتقالي فاتح
+  } else if (ageNum < 12) {
+    ageCell.setBackground("#BBDEFB"); // أزرق فاتح
+  }
+}
+
+
 
       // 📋 نسخ التنسيقات من الورقة الرئيسية
       const formatSourceRange = masterSheet.getRange(2, startCol + 1, 1, cleanRow.length);
