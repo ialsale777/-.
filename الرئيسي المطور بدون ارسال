@@ -1,0 +1,178 @@
+const EVOLUTION_API_URL = "https://w.eh4.me/message/sendText/ABD1";
+const EVOLUTION_API_KEY = "878559AC4207-4520-A544-80D3FEB9ED9B";
+
+function buildPassportMap(sheets, masterName = "الورقة6") {
+  const map = new Map();
+  for (const s of sheets) {
+    if (s.getName() === masterName) continue;
+    const data = s.getDataRange().getValues();
+    const header = data[0];
+    const passportIndex = header.indexOf("رقم الجواز");
+    if (passportIndex === -1) continue;
+    for (let i = 1; i < data.length; i++) {
+      const passport = data[i][passportIndex];
+      if (passport) map.set(passport.toString().trim(), true);
+    }
+  }
+  return map;
+}
+
+function manualRun() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet();
+  const masterSheet = sheet.getSheetByName("الورقة6");
+  const allSheets = sheet.getSheets();
+  const passportMap = buildPassportMap(allSheets);
+
+  const allData = masterSheet.getDataRange().getValues();
+  const header = allData[0];
+
+  const passportIndex = header.indexOf("رقم الجواز");
+  const dateIndex = header.indexOf("مواعيد البصمة");
+  let statusIndex = header.indexOf("تم النقل");
+  const startCol = 2;
+
+  if (statusIndex === -1) {
+    statusIndex = header.length;
+    masterSheet.getRange(1, statusIndex + 1).setValue("تم النقل");
+  }
+
+  const excludeColumns = ["تم النقل", "مواعيد البصمة"];
+  const allowedHeader = header
+    .map((col, idx) => ({ name: col, idx }))
+    .filter((col) => col.idx >= startCol && !excludeColumns.includes(col.name));
+  const allowedIndexes = allowedHeader.map(col => col.idx);
+  let cleanHeader = allowedHeader.map(col => col.name);
+
+  const birthDateIndexInAllowed = cleanHeader.indexOf("تاريخ الميلاد");
+  if (birthDateIndexInAllowed !== -1) {
+    cleanHeader.splice(birthDateIndexInAllowed + 1, 0, "العمر");
+  }
+
+  // 🔢 عدد الصفوف الممكن تنفيذها دفعة واحدة (اختياري)
+  const MAX_ROWS_PER_RUN = 100;
+  let processed = 0;
+
+  for (let i = 1; i < allData.length; i++) {
+    if (processed >= MAX_ROWS_PER_RUN) break;
+
+    try {
+      const row = allData[i];
+      const passport = row[passportIndex];
+      const date = row[dateIndex];
+      const status = row[statusIndex];
+
+      if (!passport || !date || status === "✅") continue;
+      if (passportMap.has(passport.toString().trim())) continue;
+
+      const sheetNameFull = date.toString().trim();
+      const baseName = sheetNameFull.replace(/\(\d+\)/, '').trim();
+
+      let target = allSheets.find(s => s.getName().startsWith(baseName));
+      if (!target) {
+        target = sheet.insertSheet(sheetNameFull);
+        target.setFrozenRows(1);
+        const freezeUntil = cleanHeader.indexOf("تاريخ انتهاء الجواز") + 1;
+        if (freezeUntil > 1) target.setFrozenColumns(freezeUntil);
+        target.getRange(1, 1, 1, cleanHeader.length).setValues([cleanHeader]);
+
+        for (let c = 0; c < cleanHeader.length; c++) {
+          const originalIndex = (c <= birthDateIndexInAllowed)
+            ? allowedIndexes[c]
+            : allowedIndexes[c - 1];
+          if (originalIndex !== undefined) {
+            const sourceCell = masterSheet.getRange(1, originalIndex + 1);
+            const targetCell = target.getRange(1, c + 1);
+            sourceCell.copyTo(targetCell, SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+            targetCell.setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
+            target.setColumnWidth(c + 1, masterSheet.getColumnWidth(originalIndex + 1));
+          } else {
+            target.setColumnWidth(c + 1, 100);
+          }
+        }
+      }
+
+      const currentCount = target.getLastRow() - 1;
+      const maxAllowed = parseInt((target.getName().match(/\((\d+)\)/) || [])[1]) || 30;
+      if (currentCount >= maxAllowed) {
+        SpreadsheetApp.getActive().toast(`❌ تم الوصول للحد الأقصى (${maxAllowed}) في الورقة: ${target.getName()}`, "تنبيه", 6);
+        continue;
+      }
+
+      let cleanRow = allowedIndexes.map(idx => row[idx]);
+
+      // 🟡 العمر
+      let birthDateValue = cleanRow[birthDateIndexInAllowed];
+      let age = "";
+      if (typeof birthDateValue === "string") birthDateValue = new Date(birthDateValue);
+      if (birthDateValue instanceof Date && !isNaN(birthDateValue)) {
+        const today = new Date();
+        age = today.getFullYear() - birthDateValue.getFullYear();
+        const m = today.getMonth() - birthDateValue.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < birthDateValue.getDate())) age--;
+      }
+      cleanRow.splice(birthDateIndexInAllowed + 1, 0, age);
+
+      // كود الاستلام
+      const pickupCodeIndex = cleanHeader.indexOf("كود الاستلام");
+      if (pickupCodeIndex !== -1) {
+        const randomCode = Math.floor(1000 + Math.random() * 9000);
+        cleanRow.splice(pickupCodeIndex, 0, randomCode);
+      }
+
+      const targetRowNum = target.getLastRow() + 1;
+      target.getRange(targetRowNum, 1, 1, cleanRow.length).setValues([cleanRow]);
+
+      // تنسيقات
+      const formatSourceRange = masterSheet.getRange(2, startCol + 1, 1, cleanRow.length);
+      const formatTargetRange = target.getRange(targetRowNum, 1, 1, cleanRow.length);
+      formatSourceRange.copyTo(formatTargetRange, SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+
+      const headers = target.getRange(1, 1, 1, target.getLastColumn()).getValues()[0];
+      const ageColIndex = headers.findIndex(h => h.toString().trim() === "العمر");
+      if (ageColIndex !== -1) {
+        const ageCell = target.getRange(targetRowNum, ageColIndex + 1);
+        const ageNum = parseInt(age, 10);
+        ageCell.setValue(ageNum);
+        if (!isNaN(ageNum)) {
+          if (ageNum < 6) ageCell.setBackground("#FCE4EC");
+          else if (ageNum < 12) ageCell.setBackground("#E8F5E9");
+          else ageCell.setBackground("#FFFFFF");
+        }
+      }
+
+      // قائمة تغيير الموعد
+      const changeColIndex = cleanHeader.indexOf("إجراء تغيير الموعد");
+      if (changeColIndex !== -1) {
+        const allSheetNames = allSheets.map(s => s.getName()).filter(n => n !== "الورقة6");
+        allSheetNames.push("إلغاء الموعد");
+        const rule = SpreadsheetApp.newDataValidation()
+          .requireValueInList(allSheetNames, true)
+          .setAllowInvalid(false).build();
+        const col = changeColIndex + 1;
+        const targetRange = target.getRange(2, col, target.getLastRow() - 1);
+        targetRange.setDataValidation(rule);
+      }
+
+      // ✅ Checkboxes
+      const checkboxCols = [
+        "رسالة طلب تحضير الأوراق",
+        "رسالة التأجيل",
+        "رسالة اقرار باستلام الورق",
+        "رسالة الموعد",
+        "رسالة تم التبصيم",
+        "رسالة استلام الجواز",
+        "تم الاستلام"
+      ];
+      checkboxCols.forEach(colName => {
+        const colIndex = cleanHeader.indexOf(colName);
+        if (colIndex !== -1) target.getRange(targetRowNum, colIndex + 1).insertCheckboxes();
+      });
+
+      // ✅ تم النقل
+      masterSheet.getRange(i + 1, statusIndex + 1).setValue("✅");
+      processed++;
+    } catch (err) {
+      Logger.log(`❌ خطأ في الصف ${i + 1}: ${err.message}`);
+    }
+  }
+}
