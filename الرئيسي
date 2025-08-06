@@ -164,18 +164,6 @@ target.getRange(targetRowNum, 1, 1, cleanRow.length).setValues([cleanRow]);
         }
       }
 
-      // قائمة تغيير الموعد
-      const changeColIndex = cleanHeader.indexOf("إجراء تغيير الموعد");
-      if (changeColIndex !== -1) {
-        const allSheetNames = allSheets.map(s => s.getName()).filter(n => n !== "الورقة6");
-        allSheetNames.push("إلغاء الموعد");
-        const rule = SpreadsheetApp.newDataValidation()
-          .requireValueInList(allSheetNames, true)
-          .setAllowInvalid(false).build();
-        const col = changeColIndex + 1;
-        const targetRange = target.getRange(2, col, target.getLastRow() - 1);
-        targetRange.setDataValidation(rule);
-      }
 
       // ✅ Checkboxes
       const checkboxCols = [
