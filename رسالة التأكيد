@@ -1,0 +1,89 @@
+
+function sendBookingConfirmationMessage() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet();
+  const allSheets = sheet.getSheets();
+
+  allSheets.forEach(activeSheet => {
+    const sheetNameFull = activeSheet.getName();
+    if (sheetNameFull === "الورقة6") return;
+
+    const data = activeSheet.getDataRange().getValues();
+    if (data.length < 2) return;
+
+    const header = data[0];
+    const nameIndex = header.indexOf("الاسم مطابق للجواز");
+    const phoneIndex = header.indexOf("رقم الجوال");
+    const statusConfirmIndex = header.indexOf("رسالة تأكيد الحجز");
+
+    if (nameIndex === -1 || phoneIndex === -1 || statusConfirmIndex === -1) {
+      Logger.log(`❌ الأعمدة غير مكتملة في الورقة: ${sheetNameFull}`);
+      return;
+    }
+
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      let confirmPhone = row[phoneIndex];
+      let confirmName = row[nameIndex];
+      const currentStatus = row[statusConfirmIndex];
+
+      // ✅ تجاهل الصف إذا كان تم الإرسال مسبقًا أو فشل (✅ أو ❌)
+      if (!confirmPhone || currentStatus === "✅" || currentStatus === "❌") continue;
+
+      confirmPhone = confirmPhone.toString().trim().replace(/^0+/, "");
+      if (!confirmPhone.startsWith("966")) confirmPhone = "966" + confirmPhone;
+
+      const visaDateMatch = sheetNameFull.match(/^(\d+)([A-Z]{3})/);
+      let visaDate = "غير محدد";
+      if (visaDateMatch) {
+        const day = visaDateMatch[1];
+        const monthEng = visaDateMatch[2];
+        const monthMap = {
+          JAN: "يناير", FEB: "فبراير", MAR: "مارس", APR: "أبريل",
+          MAY: "مايو", JUN: "يونيو", JUL: "يوليو", AUG: "أغسطس",
+          SEP: "سبتمبر", OCT: "أكتوبر", NOV: "نوفمبر", DEC: "ديسمبر"
+        };
+        visaDate = `*${day} ${monthMap[monthEng] || monthEng}*`;
+      }
+
+      const message =
+        `📌 مرحبًا *${confirmName || ""}*،\n` +
+        `تم تأكيد حجز موعد البصمة الشنغن الخاص بك بتاريخ ${visaDate}.\n\n` +
+        `سيتم التواصل معك من قبل الموظف في حال الحاجة لأي تفاصيل إضافية.\n` +
+        `⚠️ هذه رسالة تأكيد آلية ولا يجب الرد عليها.`;
+
+      const body = {
+        number: confirmPhone,
+        text: message
+      };
+
+      const options = {
+        method: 'post',
+        contentType: 'application/json',
+        headers: { 'apikey': EVOLUTION_API_KEY },
+        payload: JSON.stringify(body),
+        muteHttpExceptions: true
+      };
+
+      let sendStatus = "❌";
+      try {
+        const response = UrlFetchApp.fetch(EVOLUTION_API_URL, options);
+        const json = JSON.parse(response.getContentText());
+        sendStatus = (json.status === "PENDING" || json.status === "success") ? "✅" : "❌";
+      } catch (err) {}
+
+      // 🛑 لا نحاول إعادة الإرسال في حال فشل
+    activeSheet.getRange(i + 1, statusConfirmIndex + 1).setValue(sendStatus);
+
+    Logger.log(
+      `📄 [${sheetNameFull}]\n👤 الاسم: ${confirmName}\n📱 الجوال: ${confirmPhone}\n📨 الحالة: ${sendStatus}\n---\n${message}\n==========================\n`
+    );
+
+    // ⏱️ تأخير عشوائي بين 6 إلى 11 ثانية
+    const delay = Math.floor(Math.random() * (11000 - 6000 + 1)) + 6000;
+    Utilities.sleep(delay);
+      
+    }
+  });
+
+  SpreadsheetApp.getActive().toast("✅ تم إرسال الرسائل بنجاح (عدا ✅ و ❌)");
+}
