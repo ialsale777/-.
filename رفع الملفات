@@ -1,28 +1,32 @@
-// 🗂️ معرفات المجلدات (استبدلها بمعرفات المجلدات الفعلية من Google Drive)
-const folderMap = {
-  "الابلكيشن": "1xtXIHvfcRnVwQl8oEuzXl5M40uAnzVzV",
-  "التأمين": "18PNd5NTx-TjSGAojzCW8eoOgQV6SjwUF",
-  "التذاكر": "1qZdULT3dGKfdRC0pgN8JkOgXhMJahdwI",
-  "الفنادق": "11s1I5y-aSK_fRC1Un0Wr5t0FJ5cKVBlM"
-};
-
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
+
+  // قائمة إدارة الملفات
   ui.createMenu('📁 إدارة الملفات')
     .addItem('رفع ملف الابلكيشن', 'openUploadDialog_App')
     .addItem('رفع ملف التأمين', 'openUploadDialog_Insurance')
     .addItem('رفع ملف التذاكر', 'openUploadDialog_Tickets')
     .addItem('رفع ملف الفنادق', 'openUploadDialog_Hotels')
     .addToUi();
+
+  // قائمة أدوات مخصصة
+  ui.createMenu('📅 أدوات مخصصة')
+    .addItem('اختيار التاريخ والوقت', 'showDateTimePicker')
+    .addToUi();
+
+  // قائمة البحث
+  ui.createMenu('🔍 بحث')
+    .addItem('ابحث برقم الجوال', 'showPhoneSearchPopup')
+    .addToUi();
 }
 
-// دوال لكل نوع
+// 🗂️ دوال فتح النوافذ حسب نوع الملف
 function openUploadDialog_App()       { openUploadDialogWithType("الابلكيشن"); }
 function openUploadDialog_Insurance() { openUploadDialogWithType("التأمين"); }
 function openUploadDialog_Tickets()   { openUploadDialogWithType("التذاكر"); }
 function openUploadDialog_Hotels()    { openUploadDialogWithType("الفنادق"); }
 
-// الدالة العامة
+// 🖼️ فتح نافذة الرفع بناءً على نوع الملف
 function openUploadDialogWithType(columnName) {
   const template = HtmlService.createTemplateFromFile('UploadForm');
   template.columnTarget = columnName;
@@ -30,7 +34,7 @@ function openUploadDialogWithType(columnName) {
   SpreadsheetApp.getUi().showModalDialog(html, `رفع ملف: ${columnName}`);
 }
 
-// دالة الرفع
+// 📤 تنفيذ رفع الملف إلى Google Drive
 function uploadFileToDrive(data) {
   try {
     const folderId = folderMap[data.column];
@@ -55,4 +59,60 @@ function uploadFileToDrive(data) {
   } catch (e) {
     return "❌ خطأ أثناء الرفع: " + e.toString();
   }
+}
+
+// 📅 عرض نافذة اختيار التاريخ والوقت
+function showDateTimePicker() {
+  const html = HtmlService.createHtmlOutputFromFile('DateTimePicker')
+    .setWidth(400)
+    .setHeight(250);
+  SpreadsheetApp.getUi().showModalDialog(html, 'اختيار التاريخ والوقت');
+}
+
+// ⏰ حفظ التاريخ والوقت في الخلية النشطة
+function setDateTime(dateTime) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  const cell = sheet.getActiveCell();
+  cell.setValue(new Date(dateTime));
+}
+// 🔍 فتح نافذة البحث برقم الجوال
+function showPhoneSearchPopup() {
+  const html = HtmlService.createHtmlOutputFromFile('PhoneSearch')
+    .setWidth(400)
+    .setHeight(200);
+  SpreadsheetApp.getUi().showModalDialog(html, 'ابحث برقم الجوال');
+}
+
+// 🔎 البحث داخل جميع الشيتات عن رقم الجوال
+function searchPhoneInSheets(phone) {
+  if (!phone) return "⚠️ الرجاء إدخال رقم الجوال أولاً.";
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheets = ss.getSheets();
+  const excluded = ["الورقة6", "بحث", "فهرس الجوازات"];
+  const cleanedPhone = phone.toString().replace(/^0+/, "").replace(/\s+/g, "");
+  const matchingSheets = [];
+
+  for (const sheet of sheets) {
+    if (excluded.includes(sheet.getName())) continue;
+
+    const data = sheet.getDataRange().getValues();
+    const header = data[0];
+    const phoneIndex = header.indexOf("رقم الجوال");
+    if (phoneIndex === -1) continue;
+
+    for (let i = 1; i < data.length; i++) {
+      const rowPhone = (data[i][phoneIndex] || "").toString().replace(/^0+/, "").replace(/\s+/g, "");
+      if (rowPhone === cleanedPhone) {
+        matchingSheets.push(sheet.getName());
+        break;
+      }
+    }
+  }
+
+  if (matchingSheets.length > 0) {
+    return `✅ موجود في ${matchingSheets.length} ورقة:<br>- ${matchingSheets.join('<br>- ')}`;
+  }
+
+  return "❌ الرقم غير موجود في أي ورقة.";
 }
